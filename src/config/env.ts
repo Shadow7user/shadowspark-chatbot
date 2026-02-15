@@ -8,11 +8,16 @@ const envSchema = z.object({
   TWILIO_AUTH_TOKEN: z.string().min(1),
   TWILIO_WHATSAPP_NUMBER: z.string().min(1), // e.g. whatsapp:+14155238886
   OPENAI_API_KEY: z.string().startsWith("sk-"),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+  OPENAI_MAX_TOKENS: z.coerce.number().default(500),
+  OPENAI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.7),
   REDIS_URL: z.string().min(1),
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   WEBHOOK_BASE_URL: z.string().url().optional(),
+  DEFAULT_CLIENT_ID: z.string().default("shadowspark-demo"),
+  ADMIN_SECRET: z.string().min(16).optional(),
 });
 
 function loadConfig() {

@@ -22,7 +22,8 @@ connection.on("error", (err) => {
 });
 
 export const messageQueue = new Queue(QUEUE_NAME, {
-  connection: connection as any,
+  // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
+  connection,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: "exponential", delay: 2000 },
@@ -45,7 +46,8 @@ export function startWorker(router: MessageRouter): Worker<NormalizedMessage> {
       await router.processMessage(job.data);
     },
     {
-      connection: connection as any,
+      // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
+      connection,
       concurrency: 5, // Process 5 messages in parallel
       limiter: {
         max: 20, // Max 20 jobs per 1 second (WhatsApp rate limit safe)

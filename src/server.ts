@@ -31,7 +31,7 @@ async function main() {
   // Parse URL-encoded bodies (Twilio sends form data)
   app.addContentTypeParser(
     "application/x-www-form-urlencoded",
-    { parseAs: "string" },
+    { parseAs: "string", bodyLimit: 10_000 },
     (req, body, done) => {
       const parsed = Object.fromEntries(new URLSearchParams(body as string));
       done(null, parsed);
@@ -71,7 +71,7 @@ async function main() {
           config.TWILIO_AUTH_TOKEN,
           twilioSignature || "",
           webhookUrl,
-          body as unknown as Record<string, string>
+          body as Record<string, string>
         );
 
         if (!isValid && config.NODE_ENV === "production") {
@@ -84,7 +84,7 @@ async function main() {
           data: {
             channel: "WHATSAPP",
             eventType: "twilio_message",
-            payload: body as object,
+            payload: body as Record<string, string | undefined>,
           },
         }).catch((err) => logger.warn({ err }, "Failed to log webhook (DB may be sleeping)"));
 
@@ -115,7 +115,13 @@ async function main() {
   );
 
   // ── Seed demo client config ─────────────────────────
-  app.get("/setup/seed-demo", async () => {
+  app.get("/setup/seed-demo", async (request, reply) => {
+    if (config.ADMIN_SECRET) {
+      const secret = request.headers["x-admin-secret"] as string;
+      if (secret !== config.ADMIN_SECRET) {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+    }
     const existing = await prisma.clientConfig.findUnique({
       where: { clientId: "shadowspark-demo" },
     });

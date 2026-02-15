@@ -4,6 +4,7 @@ import type { ChannelAdapter, NormalizedMessage } from "../types/index.js";
 import { logger } from "../core/logger.js";
 
 const client = twilio(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN);
+const MAX_MESSAGE_LENGTH = 1600;
 
 export class TwilioWhatsAppAdapter implements ChannelAdapter {
   readonly channelType = "WHATSAPP" as const;
@@ -38,7 +39,7 @@ export class TwilioWhatsAppAdapter implements ChannelAdapter {
         channelType: "WHATSAPP",
         channelUserId: from,
         channelMessageId: body.MessageSid,
-        text: body.Body,
+        text: body.Body.slice(0, MAX_MESSAGE_LENGTH),
         userName: body.ProfileName || undefined,
         timestamp: new Date(),
         rawPayload: body,
@@ -51,6 +52,7 @@ export class TwilioWhatsAppAdapter implements ChannelAdapter {
 }
 
 export interface TwilioWebhookBody {
+  [key: string]: string | undefined;
   MessageSid: string;
   AccountSid: string;
   From: string;

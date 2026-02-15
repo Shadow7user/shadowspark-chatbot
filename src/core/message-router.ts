@@ -1,9 +1,8 @@
 import type { NormalizedMessage, ChannelAdapter } from "../types/index.js";
 import { ConversationManager } from "./conversation-manager.js";
 import { AIBrain } from "./ai-brain.js";
+import { config } from "../config/env.js";
 import { logger } from "./logger.js";
-
-const DEFAULT_CLIENT_ID = "shadowspark-demo"; // Demo client for MVP
 
 export class MessageRouter {
   private conversationManager = new ConversationManager();
@@ -36,7 +35,7 @@ export class MessageRouter {
       const conversationId = await this.conversationManager.resolveConversation(
         userId,
         msg.channelType,
-        DEFAULT_CLIENT_ID
+        config.DEFAULT_CLIENT_ID
       );
 
       // 3. Save user message (unique constraint on channelMessageId acts as dedup lock)
@@ -53,7 +52,7 @@ export class MessageRouter {
       // 4. Load context
       const context = await this.conversationManager.loadContext(
         conversationId,
-        DEFAULT_CLIENT_ID
+        config.DEFAULT_CLIENT_ID
       );
 
       // 5. Generate AI response

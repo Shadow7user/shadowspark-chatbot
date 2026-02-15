@@ -1,10 +1,11 @@
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import type { ConversationContext, ProcessingResult } from "../types/index.js";
+import { config } from "../config/env.js";
 import { logger } from "./logger.js";
 
 export class AIBrain {
-  private model = openai("gpt-4o-mini");
+  private model = openai(config.OPENAI_MODEL);
 
   /**
    * Generate AI response from conversation context
@@ -38,8 +39,8 @@ export class AIBrain {
       const result = await generateText({
         model: this.model,
         messages,
-        maxTokens: 500,
-        temperature: 0.7,
+        maxTokens: config.OPENAI_MAX_TOKENS,
+        temperature: config.OPENAI_TEMPERATURE,
       });
 
       const latency = Date.now() - startTime;
