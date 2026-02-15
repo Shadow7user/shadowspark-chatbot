@@ -1,0 +1,160 @@
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import { config } from "./config/env.js";
+import { logger } from "./core/logger.js";
+import { MessageRouter } from "./core/message-router.js";
+import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
+import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
+import { enqueueMessage, startWorker } from "./queues/message-queue.js";
+import { prisma } from "./db/client.js";
+import twilio from "twilio";
+
+async function main() {
+  // ── Initialize Fastify ──────────────────────────────
+  const app = Fastify({
+    logger: {
+      level: config.LOG_LEVEL,
+      transport:
+        config.NODE_ENV === "development"
+          ? { target: "pino-pretty" }
+          : undefined,
+    },
+  });
+
+  await app.register(cors, { origin: true });
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: "1 minute",
+  });
+
+  // Parse URL-encoded bodies (Twilio sends form data)
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string" },
+    (req, body, done) => {
+      const parsed = Object.fromEntries(new URLSearchParams(body as string));
+      done(null, parsed);
+    }
+  );
+
+  // ── Initialize adapters & router ────────────────────
+  const whatsappAdapter = new TwilioWhatsAppAdapter();
+  const router = new MessageRouter();
+  router.registerAdapter(whatsappAdapter);
+
+  // Start BullMQ worker
+  startWorker(router);
+
+  // ── Health check ────────────────────────────────────
+  app.get("/health", async () => ({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    provider: "twilio",
+  }));
+
+  // ── Twilio WhatsApp webhook (POST) ─────────────────
+  app.post<{ Body: TwilioWebhookBody }>(
+    "/webhooks/whatsapp",
+    async (request, reply) => {
+      try {
+        const body = request.body;
+
+        // Validate request is from Twilio
+        const twilioSignature = request.headers["x-twilio-signature"] as string;
+        const webhookUrl = config.WEBHOOK_BASE_URL
+          ? `${config.WEBHOOK_BASE_URL}/webhooks/whatsapp`
+          : `http://localhost:${config.PORT}/webhooks/whatsapp`;
+
+        const isValid = twilio.validateRequest(
+          config.TWILIO_AUTH_TOKEN,
+          twilioSignature || "",
+          webhookUrl,
+          body as unknown as Record<string, string>
+        );
+
+        if (!isValid && config.NODE_ENV === "production") {
+          logger.warn("Invalid Twilio signature");
+          return reply.status(403).send("Forbidden");
+        }
+
+        // Log webhook for debugging (non-blocking — don't let DB failures kill the handler)
+        prisma.webhookLog.create({
+          data: {
+            channel: "WHATSAPP",
+            eventType: "twilio_message",
+            payload: body as object,
+          },
+        }).catch((err) => logger.warn({ err }, "Failed to log webhook (DB may be sleeping)"));
+
+        // Parse into normalized message
+        const normalized = whatsappAdapter.parseTwilioWebhook(body);
+        if (!normalized) {
+          // Return empty TwiML
+          reply.header("Content-Type", "text/xml");
+          return reply.send("<Response></Response>");
+        }
+
+        // Enqueue for async AI processing
+        await enqueueMessage(normalized);
+
+        // Return empty TwiML (response sent async via API)
+        reply.header("Content-Type", "text/xml");
+        return reply.send("<Response></Response>");
+      } catch (error) {
+        logger.error({ error }, "Twilio webhook processing error");
+        reply.header("Content-Type", "text/xml");
+        return reply.send("<Response></Response>");
+      }
+    }
+  );
+
+  // ── Seed demo client config ─────────────────────────
+  app.get("/setup/seed-demo", async () => {
+    const existing = await prisma.clientConfig.findUnique({
+      where: { clientId: "shadowspark-demo" },
+    });
+
+    if (existing) return { message: "Demo config already exists", config: existing };
+
+    const demo = await prisma.clientConfig.create({
+      data: {
+        clientId: "shadowspark-demo",
+        businessName: "ShadowSpark Demo",
+        systemPrompt: `You are a friendly AI assistant for a Nigerian business.
+
+Your role:
+- Answer customer questions about products and services
+- Help with order inquiries and status checks
+- Collect customer contact information when appropriate
+- Be warm, professional, and use Nigerian English naturally
+- Keep responses concise (under 200 words)
+- If you can't help, offer to connect them with a human agent
+
+When greeting, be warm: "Hello! Welcome to [Business Name]. How can I help you today?"
+For pricing, always use Naira (₦).
+Understand Pidgin English if customers use it.`,
+        welcomeMessage: "Hello! 👋 Welcome! How can I help you today?",
+        fallbackMessage:
+          "I'm sorry, I didn't quite understand that. Could you rephrase? Or type 'agent' to speak with someone.",
+        channels: { whatsapp: true, telegram: false, web: false },
+      },
+    });
+
+    return { message: "Demo config created", config: demo };
+  });
+
+  // ── Start server ────────────────────────────────────
+  try {
+    await app.listen({ port: config.PORT, host: "0.0.0.0" });
+    logger.info(`🚀 ShadowSpark Chatbot running on port ${config.PORT}`);
+    logger.info(`📱 WhatsApp webhook (Twilio): POST /webhooks/whatsapp`);
+    logger.info(`❤️  Health check: GET /health`);
+  } catch (error) {
+    logger.fatal({ error }, "Server failed to start");
+    process.exit(1);
+  }
+}
+
+main();

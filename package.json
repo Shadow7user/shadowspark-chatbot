@@ -1,0 +1,38 @@
+{
+  "name": "shadowspark-chatbot",
+  "version": "1.0.0",
+  "description": "ShadowSpark AI Chatbot - WhatsApp, Telegram, Web",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/server.js",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^1.0.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/rate-limit": "^10.2.0",
+    "@prisma/client": "^6.10.0",
+    "ai": "^4.0.0",
+    "bullmq": "^5.30.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "twilio": "^5.12.1",
+    "zod": "^3.24.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prisma": "^6.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

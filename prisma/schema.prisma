@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ChannelType {
+  WHATSAPP
+  TELEGRAM
+  WEB
+}
+
+enum ConversationStatus {
+  ACTIVE
+  PAUSED
+  HANDOFF
+  CLOSED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model ChatUser {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?
+  phone     String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  channels      UserChannel[]
+  conversations Conversation[]
+
+  @@map("chat_users")
+}
+
+model UserChannel {
+  id            String      @id @default(cuid())
+  userId        String
+  channelType   ChannelType
+  channelUserId String      // WhatsApp phone, Telegram chatId, web sessionId
+  createdAt     DateTime    @default(now())
+
+  user ChatUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelType, channelUserId])
+  @@map("user_channels")
+}
+
+model Conversation {
+  id        String             @id @default(cuid())
+  userId    String
+  channel   ChannelType
+  status    ConversationStatus @default(ACTIVE)
+  summary   String?            // AI-generated summary of older messages
+  clientId  String?            // Which business client this belongs to
+  metadata  Json?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user     ChatUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, channel])
+  @@index([clientId])
+  @@map("conversations")
+}
+
+model Message {
+  id               String      @id @default(cuid())
+  conversationId   String
+  role             MessageRole
+  content          String
+  channelMessageId String?     // Platform-specific message ID for dedup
+  metadata         Json?
+  createdAt        DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([channelMessageId])
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model WebhookLog {
+  id        String   @id @default(cuid())
+  channel   ChannelType
+  eventType String
+  payload   Json
+  processed Boolean  @default(false)
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([channel, createdAt])
+  @@map("webhook_logs")
+}
+
+model ClientConfig {
+  id             String   @id @default(cuid())
+  clientId       String   @unique // Business client identifier
+  businessName   String
+  systemPrompt   String   // Custom AI personality/instructions
+  welcomeMessage String?
+  fallbackMessage String?
+  maxTokens      Int      @default(500)
+  temperature    Float    @default(0.7)
+  channels       Json     // Enabled channels config
+  metadata       Json?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("client_configs")
+}
