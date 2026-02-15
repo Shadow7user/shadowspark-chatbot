@@ -17,6 +17,10 @@ const connection = new IORedis(config.REDIS_URL, {
   },
 });
 
+connection.on("error", (err) => {
+  logger.error({ err: err.message }, "Redis connection error");
+});
+
 export const messageQueue = new Queue(QUEUE_NAME, {
   connection: connection as any,
   defaultJobOptions: {
@@ -70,4 +74,13 @@ export async function enqueueMessage(msg: NormalizedMessage): Promise<void> {
   await messageQueue.add("process-message", msg, {
     priority: msg.channelType === "WHATSAPP" ? 1 : 2, // WhatsApp highest priority
   });
+}
+
+/**
+ * Gracefully close queue, worker, and Redis connection.
+ */
+export async function closeQueue(worker?: Worker): Promise<void> {
+  if (worker) await worker.close();
+  await messageQueue.close();
+  await connection.quit();
 }

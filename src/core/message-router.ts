@@ -29,24 +29,26 @@ export class MessageRouter {
     const startTime = Date.now();
 
     try {
-      // 1. Dedup
-      if (msg.channelMessageId) {
-        const isDup = await this.conversationManager.isDuplicate(msg.channelMessageId);
-        if (isDup) {
-          logger.warn({ messageId: msg.channelMessageId }, "Duplicate message, skipping");
-          return;
-        }
-      }
-
-      // 2. Resolve user
+      // 1. Resolve user
       const userId = await this.conversationManager.resolveUser(msg);
 
-      // 3. Resolve conversation
+      // 2. Resolve conversation
       const conversationId = await this.conversationManager.resolveConversation(
         userId,
         msg.channelType,
         DEFAULT_CLIENT_ID
       );
+
+      // 3. Save user message (unique constraint on channelMessageId acts as dedup lock)
+      const saved = await this.conversationManager.saveUserMessage(
+        conversationId,
+        msg.text,
+        msg.channelMessageId
+      );
+      if (!saved) {
+        logger.warn({ messageId: msg.channelMessageId }, "Duplicate message, skipping");
+        return;
+      }
 
       // 4. Load context
       const context = await this.conversationManager.loadContext(
@@ -54,19 +56,11 @@ export class MessageRouter {
         DEFAULT_CLIENT_ID
       );
 
-      // Append current message to context for AI
-      context.messages.push({ role: "USER", content: msg.text });
-
       // 5. Generate AI response
       const result = await this.aiBrain.generateResponse(context);
 
-      // 6. Save exchange
-      await this.conversationManager.saveExchange(
-        conversationId,
-        msg.text,
-        result.response,
-        msg.channelMessageId
-      );
+      // 6. Save AI response
+      await this.conversationManager.saveAIResponse(conversationId, result.response);
 
       // 7. Send response
       const adapter = this.adapters.get(msg.channelType);

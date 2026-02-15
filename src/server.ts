@@ -6,7 +6,7 @@ import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
 import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
-import { enqueueMessage, startWorker } from "./queues/message-queue.js";
+import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
 
@@ -43,8 +43,8 @@ async function main() {
   const router = new MessageRouter();
   router.registerAdapter(whatsappAdapter);
 
-  // Start BullMQ worker
-  startWorker(router);
+  // Start BullMQ worker (store ref for graceful shutdown)
+  const worker = startWorker(router);
 
   // ── Health check ────────────────────────────────────
   app.get("/health", async () => ({
@@ -97,7 +97,11 @@ async function main() {
         }
 
         // Enqueue for async AI processing
-        await enqueueMessage(normalized);
+        try {
+          await enqueueMessage(normalized);
+        } catch (enqueueError) {
+          logger.error({ enqueueError }, "Failed to enqueue message — Redis may be down");
+        }
 
         // Return empty TwiML (response sent async via API)
         reply.header("Content-Type", "text/xml");
@@ -155,6 +159,27 @@ Understand Pidgin English if customers use it.`,
     logger.fatal({ error }, "Server failed to start");
     process.exit(1);
   }
+
+  // ── Graceful shutdown ─────────────────────────────
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, "Shutdown signal received, closing gracefully...");
+    try {
+      await app.close();
+      await closeQueue(worker);
+      await prisma.$disconnect();
+      logger.info("Shutdown complete");
+      process.exit(0);
+    } catch (error) {
+      logger.error({ error }, "Error during shutdown");
+      process.exit(1);
+    }
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-main();
+main().catch((error) => {
+  console.error("Fatal startup error:", error);
+  process.exit(1);
+});

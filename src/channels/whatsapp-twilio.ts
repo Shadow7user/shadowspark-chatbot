@@ -11,15 +11,20 @@ export class TwilioWhatsAppAdapter implements ChannelAdapter {
   async sendMessage(to: string, text: string): Promise<void> {
     const toNumber = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
 
-    const webhookBase = config.WEBHOOK_BASE_URL || `http://localhost:${config.PORT}`;
-    const message = await client.messages.create({
-      from: config.TWILIO_WHATSAPP_NUMBER,
-      to: toNumber,
-      body: text,
-      statusCallback: `${webhookBase}/health`,
-    });
+    try {
+      const webhookBase = config.WEBHOOK_BASE_URL || `http://localhost:${config.PORT}`;
+      const message = await client.messages.create({
+        from: config.TWILIO_WHATSAPP_NUMBER,
+        to: toNumber,
+        body: text,
+        statusCallback: `${webhookBase}/health`,
+      });
 
-    logger.info({ to, sid: message.sid }, "WhatsApp message sent via Twilio");
+      logger.info({ to, sid: message.sid }, "WhatsApp message sent via Twilio");
+    } catch (error) {
+      logger.error({ to, error }, "Twilio send failed");
+      throw error;
+    }
   }
 
   parseTwilioWebhook(body: TwilioWebhookBody): NormalizedMessage | null {
