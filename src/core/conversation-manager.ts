@@ -1,8 +1,12 @@
-import { prisma } from "../db/client.js";
-import type { NormalizedMessage, ConversationContext } from "../types/index.js";
-import { logger } from "./logger.js";
 import type { ChannelType } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import { prisma } from "../db/client.js";
+import type { ConversationContext, NormalizedMessage } from "../types/index.js";
+import { logger } from "./logger.js";
+import {
+  checkTokenCap,
+  incrementTokenUsage as trackTokenUsage,
+} from "./token-tracker.js";
 
 const CONTEXT_WINDOW = 10; // Last N messages to include in AI context
 const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
@@ -39,11 +43,17 @@ export class ConversationManager {
         },
       });
 
-      logger.info({ userId: user.id, channel: msg.channelType }, "New user created");
+      logger.info(
+        { userId: user.id, channel: msg.channelType },
+        "New user created",
+      );
       return user.id;
     } catch (error) {
       // Unique constraint violation — concurrent request already created this user
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
         const retry = await prisma.userChannel.findUnique({
           where: {
             channelType_channelUserId: {
@@ -66,7 +76,7 @@ export class ConversationManager {
   async resolveConversation(
     userId: string,
     channel: ChannelType,
-    clientId: string
+    clientId: string,
   ): Promise<string> {
     // Use interactive transaction to prevent concurrent creation
     return prisma.$transaction(async (tx) => {
@@ -98,9 +108,9 @@ export class ConversationManager {
    */
   async loadContext(
     conversationId: string,
-    clientId: string
+    clientId: string,
   ): Promise<ConversationContext> {
-    const [conversation, clientConfig] = await Promise.all([
+    const [conversation, clientConfig, tokenStatus] = await Promise.all([
       prisma.conversation.findUniqueOrThrow({
         where: { id: conversationId },
         include: {
@@ -114,10 +124,10 @@ export class ConversationManager {
       prisma.clientConfig.findUnique({
         where: { clientId },
       }),
+      checkTokenCap(clientId),
     ]);
 
-    const systemPrompt =
-      clientConfig?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    const systemPrompt = clientConfig?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
 
     return {
       conversationId,
@@ -126,6 +136,10 @@ export class ConversationManager {
       messages: conversation.messages.reverse(), // Chronological order
       summary: conversation.summary ?? undefined,
       systemPrompt,
+      handoffMessage: clientConfig?.fallbackMessage ?? DEFAULT_HANDOFF_MESSAGE,
+      conversationStatus: conversation.status,
+      tokenUsageLimit: tokenStatus.cap ?? 100_000,
+      monthlyTokenUsage: tokenStatus.currentUsage,
     };
   }
 
@@ -136,7 +150,7 @@ export class ConversationManager {
   async saveUserMessage(
     conversationId: string,
     text: string,
-    channelMessageId?: string
+    channelMessageId?: string,
   ): Promise<boolean> {
     try {
       await prisma.message.create({
@@ -149,7 +163,10 @@ export class ConversationManager {
       });
       return true;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
         return false; // Duplicate channelMessageId
       }
       throw error;
@@ -157,9 +174,32 @@ export class ConversationManager {
   }
 
   /**
+   * Transition conversation to HANDOFF status.
+   * Subsequent messages are held for a human agent — AI is not called.
+   */
+  async setHandoffStatus(conversationId: string): Promise<void> {
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { status: "HANDOFF", updatedAt: new Date() },
+    });
+  }
+
+  /**
+   * Increment the monthly token counter for a client after each AI call.
+   * Non-critical path — failures are caught by the caller and logged, not thrown.
+   * Uses the token-tracker module which handles month resets automatically.
+   */
+  async incrementTokenUsage(clientId: string, tokens: number): Promise<void> {
+    await trackTokenUsage(clientId, tokens);
+  }
+
+  /**
    * Save AI response and update conversation timestamp
    */
-  async saveAIResponse(conversationId: string, response: string): Promise<void> {
+  async saveAIResponse(
+    conversationId: string,
+    response: string,
+  ): Promise<void> {
     await prisma.$transaction([
       prisma.message.create({
         data: { conversationId, role: "ASSISTANT", content: response },
@@ -172,7 +212,12 @@ export class ConversationManager {
   }
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful customer support assistant for a Nigerian business. 
+const DEFAULT_HANDOFF_MESSAGE =
+  "Your request has been escalated to a human agent. " +
+  "Someone from our team will reach you shortly. " +
+  "Please hold on and do not send further messages — your conversation has been saved.";
+
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful customer support assistant for a Nigerian business.
 
 Guidelines:
 - Be friendly, professional, and concise

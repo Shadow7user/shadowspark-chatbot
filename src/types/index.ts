@@ -1,4 +1,4 @@
-import type { ChannelType, MessageRole } from "@prisma/client";
+import type { ChannelType, MessageRole, ConversationStatus } from "@prisma/client";
 
 export interface NormalizedMessage {
   channelType: ChannelType;
@@ -29,6 +29,14 @@ export interface ConversationContext {
   }>;
   summary?: string;
   systemPrompt: string;
+  /** Message sent when conversation is escalated to a human agent */
+  handoffMessage: string;
+  /** Current status of the conversation — checked before deciding to call AI */
+  conversationStatus: ConversationStatus;
+  /** Monthly token cap for this client (from ClientConfig.tokenUsageLimit) */
+  tokenUsageLimit: number;
+  /** Tokens consumed so far this month (from ClientConfig.monthlyTokenUsage) */
+  monthlyTokenUsage: number;
 }
 
 export interface ChannelAdapter {

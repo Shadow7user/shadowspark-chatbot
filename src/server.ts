@@ -11,6 +11,22 @@ import { prisma } from "./db/client.js";
 import twilio from "twilio";
 
 async function main() {
+  // ── Production environment guard ────────────────────
+  // Railway sets RAILWAY_ENVIRONMENT automatically. If deployed there but
+  // NODE_ENV is not "production", the process refuses to start — avoids
+  // silent misconfig where dev settings run against production infrastructure.
+  if (process.env.RAILWAY_ENVIRONMENT !== undefined && config.NODE_ENV !== "production") {
+    logger.fatal(
+      {
+        NODE_ENV: config.NODE_ENV,
+        RAILWAY_ENVIRONMENT: process.env.RAILWAY_ENVIRONMENT,
+      },
+      "NODE_ENV must be 'production' in Railway deployment. " +
+        "Set NODE_ENV=production in Railway service variables and redeploy."
+    );
+    process.exit(1);
+  }
+
   // ── Initialize Fastify ──────────────────────────────
   const app = Fastify({
     logger: {
@@ -116,11 +132,14 @@ async function main() {
 
   // ── Seed demo client config ─────────────────────────
   app.get("/setup/seed-demo", async (request, reply) => {
-    if (config.ADMIN_SECRET) {
-      const secret = request.headers["x-admin-secret"] as string;
-      if (secret !== config.ADMIN_SECRET) {
-        return reply.status(401).send({ error: "Unauthorized" });
-      }
+    // Route is disabled unless ADMIN_SECRET is explicitly configured.
+    // In production this is guaranteed by the Zod superRefine check in env.ts.
+    if (!config.ADMIN_SECRET) {
+      return reply.status(404).send({ error: "Not found" });
+    }
+    const secret = request.headers["x-admin-secret"] as string;
+    if (secret !== config.ADMIN_SECRET) {
+      return reply.status(401).send({ error: "Unauthorized" });
     }
     const existing = await prisma.clientConfig.findUnique({
       where: { clientId: "shadowspark-demo" },
