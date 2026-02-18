@@ -10,6 +10,7 @@ export interface NormalizedMessage {
   mediaType?: "image" | "audio" | "video" | "document";
   timestamp: Date;
   rawPayload: unknown;
+  priority?: number; // Optional priority for queue routing
 }
 
 export interface OutboundMessage {
