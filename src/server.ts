@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { config } from "./config/env.js";
@@ -183,8 +184,13 @@ Understand Pidgin English if customers use it.`,
   });
 
   // ── Admin Escalation Queue Endpoints ───────────────
+  // Note: These endpoints are protected by:
+  // 1. Global rate limiter (100 req/min) applied to all routes
+  // 2. Admin authentication via x-admin-secret header
+  // This provides adequate protection against abuse while keeping route config simple
+  
   // Helper: Check admin auth
-  const checkAdminAuth = (request: any, reply: any) => {
+  const checkAdminAuth = (request: FastifyRequest, reply: FastifyReply): boolean => {
     if (!config.ADMIN_SECRET) {
       reply.status(404).send({ error: "Not found" });
       return false;
@@ -198,31 +204,37 @@ Understand Pidgin English if customers use it.`,
   };
 
   // Get pending escalations
-  app.get("/admin/escalations", async (request, reply) => {
-    if (!checkAdminAuth(request, reply)) return;
+  app.get(
+    "/admin/escalations",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
 
-    const { queueType, limit } = request.query as {
-      queueType?: string;
-      limit?: string;
-    };
+      const { queueType, limit } = request.query as {
+        queueType?: string;
+        limit?: string;
+      };
 
-    const escalations = await getPendingEscalations(
-      queueType as any,
-      limit ? parseInt(limit) : 50
-    );
+      const escalations = await getPendingEscalations(
+        queueType as any,
+        limit ? parseInt(limit) : 50
+      );
 
-    return { escalations, count: escalations.length };
-  });
+      return { escalations, count: escalations.length };
+    }
+  );
 
   // Get escalation statistics
-  app.get("/admin/escalations/stats", async (request, reply) => {
-    if (!checkAdminAuth(request, reply)) return;
+  app.get(
+    "/admin/escalations/stats",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
 
-    const { queueType } = request.query as { queueType?: string };
-    const stats = await getEscalationStats(queueType as any);
+      const { queueType } = request.query as { queueType?: string };
+      const stats = await getEscalationStats(queueType as any);
 
-    return { stats };
-  });
+      return { stats };
+    }
+  );
 
   // Assign escalation to admin
   app.post<{ Params: { id: string }; Body: { assignedTo: string } }>(
@@ -282,88 +294,97 @@ Understand Pidgin English if customers use it.`,
 
   // ── Analytics Endpoints ─────────────────────────────
   // Get client analytics
-  app.get("/analytics/client/:clientId", async (request, reply) => {
-    if (!checkAdminAuth(request, reply)) return;
+  app.get(
+    "/analytics/client/:clientId",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
 
-    const { clientId } = request.params as { clientId: string };
-    const { startDate, endDate } = request.query as {
-      startDate?: string;
-      endDate?: string;
-    };
+      const { clientId } = request.params as { clientId: string };
+      const { startDate, endDate } = request.query as {
+        startDate?: string;
+        endDate?: string;
+      };
 
-    const analytics = await getClientAnalytics(
-      clientId,
-      startDate ? new Date(startDate) : undefined,
-      endDate ? new Date(endDate) : undefined
-    );
+      const analytics = await getClientAnalytics(
+        clientId,
+        startDate ? new Date(startDate) : undefined,
+        endDate ? new Date(endDate) : undefined
+      );
 
-    return { clientId, analytics };
-  });
+      return { clientId, analytics };
+    }
+  );
 
   // Get top intents for a client
-  app.get("/analytics/intents/:clientId", async (request, reply) => {
-    if (!checkAdminAuth(request, reply)) return;
+  app.get(
+    "/analytics/intents/:clientId",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
 
-    const { clientId } = request.params as { clientId: string };
-    const { limit, startDate } = request.query as {
-      limit?: string;
-      startDate?: string;
-    };
+      const { clientId } = request.params as { clientId: string };
+      const { limit, startDate } = request.query as {
+        limit?: string;
+        startDate?: string;
+      };
 
-    const topIntents = await getTopIntents(
-      clientId,
-      limit ? parseInt(limit) : 5,
-      startDate ? new Date(startDate) : undefined
-    );
+      const topIntents = await getTopIntents(
+        clientId,
+        limit ? parseInt(limit) : 5,
+        startDate ? new Date(startDate) : undefined
+      );
 
-    return { clientId, topIntents };
-  });
+      return { clientId, topIntents };
+    }
+  );
 
   // Get overall analytics dashboard
-  app.get("/analytics/dashboard", async (request, reply) => {
-    if (!checkAdminAuth(request, reply)) return;
+  app.get(
+    "/analytics/dashboard",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
 
-    const { startDate, endDate } = request.query as {
-      startDate?: string;
-      endDate?: string;
-    };
+      const { startDate, endDate } = request.query as {
+        startDate?: string;
+        endDate?: string;
+      };
 
-    const dateFilter = {
-      ...(startDate && { gte: new Date(startDate) }),
-      ...(endDate && { lte: new Date(endDate) }),
-    };
+      const dateFilter = {
+        ...(startDate && { gte: new Date(startDate) }),
+        ...(endDate && { lte: new Date(endDate) }),
+      };
 
-    const [
-      totalConversations,
-      totalMessages,
-      conversationsByIntent,
-      avgResponseTime,
-    ] = await Promise.all([
-      prisma.conversationAnalytics.count({
-        where: startDate || endDate ? { createdAt: dateFilter } : {},
-      }),
-      prisma.conversationAnalytics.aggregate({
-        where: startDate || endDate ? { createdAt: dateFilter } : {},
-        _sum: { messageCount: true },
-      }),
-      prisma.conversationAnalytics.groupBy({
-        by: ["intent"],
-        where: startDate || endDate ? { createdAt: dateFilter } : {},
-        _count: { id: true },
-      }),
-      prisma.conversationAnalytics.aggregate({
-        where: startDate || endDate ? { createdAt: dateFilter } : {},
-        _avg: { avgResponseTimeMs: true },
-      }),
-    ]);
+      const [
+        totalConversations,
+        totalMessages,
+        conversationsByIntent,
+        avgResponseTime,
+      ] = await Promise.all([
+        prisma.conversationAnalytics.count({
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+        }),
+        prisma.conversationAnalytics.aggregate({
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+          _sum: { messageCount: true },
+        }),
+        prisma.conversationAnalytics.groupBy({
+          by: ["intent"],
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+          _count: { id: true },
+        }),
+        prisma.conversationAnalytics.aggregate({
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+          _avg: { avgResponseTimeMs: true },
+        }),
+      ]);
 
-    return {
-      totalConversations,
-      totalMessages: totalMessages._sum.messageCount ?? 0,
-      avgResponseTimeMs: Math.round(avgResponseTime._avg.avgResponseTimeMs ?? 0),
-      conversationsByIntent,
-    };
-  });
+      return {
+        totalConversations,
+        totalMessages: totalMessages._sum.messageCount ?? 0,
+        avgResponseTimeMs: Math.round(avgResponseTime._avg.avgResponseTimeMs ?? 0),
+        conversationsByIntent,
+      };
+    }
+  );
 
   // ── Start server ────────────────────────────────────
   try {

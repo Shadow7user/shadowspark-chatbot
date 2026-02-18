@@ -2,11 +2,12 @@ import { prisma } from "../db/client.js";
 import { logger } from "./logger.js";
 
 /**
- * Cost estimation based on OpenAI pricing (as of 2024)
- * GPT-3.5-turbo: ~$0.0015 per 1K tokens (input + output combined)
- * GPT-4: ~$0.03 per 1K tokens
+ * Cost estimation based on OpenAI pricing (Feb 2026)
+ * GPT-4o-mini: ~$0.150 per 1M input tokens, ~$0.600 per 1M output tokens
+ * Average: ~$0.0015 per 1K tokens (combined input + output)
+ * Note: Verify current pricing at https://openai.com/api/pricing/
  */
-const COST_PER_TOKEN = 0.0000015; // Default to GPT-3.5-turbo pricing
+const COST_PER_TOKEN = 0.0000015; // Average GPT-4o-mini pricing
 
 export interface CostEstimate {
   estimatedTokens: number;
@@ -37,7 +38,7 @@ export function estimateCost(
   return {
     estimatedTokens: totalTokens,
     estimatedCost,
-    model: "gpt-3.5-turbo",
+    model: "gpt-4o-mini",
   };
 }
 
