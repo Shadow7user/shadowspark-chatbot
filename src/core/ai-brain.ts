@@ -15,8 +15,8 @@ export class AIBrain {
       // Build messages array
       const messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
 
-      // Use SYSTEM_PROMPT from knowledge-base.js, or fall back to client's system prompt
-      let systemPrompt = SYSTEM_PROMPT || ctx.systemPrompt;
+      // Use SYSTEM_PROMPT from knowledge-base.js
+      let systemPrompt = SYSTEM_PROMPT;
       
       // Add user's name to system prompt if available
       if (ctx.userName) {
@@ -91,7 +91,7 @@ export class AIBrain {
         { status: response.status, error: errorText },
         "OpenRouter API request failed"
       );
-      throw new Error(`OpenRouter API error: ${response.status}`);
+      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
