@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && cp -r src/**/*.js dist/ 2>/dev/null || cp src/config/*.js dist/config/ 2>/dev/null || true",
     "start": "node dist/server.js",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
