@@ -26,32 +26,34 @@ function addResult(service: string, status: ValidationResult["status"], message:
 
 async function validateDatabase() {
   console.log("\n🔍 Validating Database (PostgreSQL)...")
+  const prisma = new PrismaClient()
   try {
-    const prisma = new PrismaClient()
     await prisma.$queryRaw`SELECT 1`
-    await prisma.$disconnect()
     addResult("Database", "✅ PASS", "Connected successfully to PostgreSQL")
   } catch (error) {
     addResult("Database", "❌ FAIL", `Connection failed: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    await prisma.$disconnect()
   }
 }
 
 async function validateRedis() {
   console.log("\n🔍 Validating Redis...")
+  const redis = new Redis(config.REDIS_URL, {
+    maxRetriesPerRequest: 2,
+    retryStrategy: (times) => {
+      if (times > 2) return null
+      return 1000
+    }
+  })
+  
   try {
-    const redis = new Redis(config.REDIS_URL, {
-      maxRetriesPerRequest: 2,
-      retryStrategy: (times) => {
-        if (times > 2) return null
-        return 1000
-      }
-    })
-    
     await redis.ping()
-    await redis.quit()
     addResult("Redis", "✅ PASS", "Connected successfully to Redis")
   } catch (error) {
     addResult("Redis", "❌ FAIL", `Connection failed: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    await redis.quit()
   }
 }
 
