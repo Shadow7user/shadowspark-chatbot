@@ -14,6 +14,7 @@ model ChatUser {
   email         String?
   phone         String?
   metadata      Json?
+  isVip         Boolean        @default(false)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   conversations Conversation[]
@@ -58,11 +59,16 @@ model Message {
   role             MessageRole
   content          String
   channelMessageId String?      @unique
+  intent           IntentType?
+  confidence       Float?
+  priority         Int          @default(5)
   metadata         Json?
   createdAt        DateTime     @default(now())
   conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+  @@index([intent, createdAt])
+  @@index([priority, createdAt])
   @@map("messages")
 }
 
@@ -91,6 +97,11 @@ model ClientConfig {
   monthlyTokenUsage Int      @default(0)
   monthlyTokenCap   Int?
   lastResetMonth    String?
+  monthlyCostUsage  Float    @default(0)
+  monthlyCostCap    Float?
+  dailyCostUsage    Float    @default(0)
+  dailyCostCap      Float?
+  lastCostResetDate String?
   channels          Json
   metadata          Json?
   active            Boolean  @default(true)
@@ -179,6 +190,72 @@ enum MessageRole {
   USER
   ASSISTANT
   SYSTEM
+}
+
+model EscalationQueue {
+  id             String             @id @default(cuid())
+  conversationId String
+  priority       Int                @default(5)
+  queueType      EscalationQueueType @default(SUPPORT)
+  reason         String?
+  assignedTo     String?
+  status         EscalationStatus   @default(PENDING)
+  createdAt      DateTime           @default(now())
+  resolvedAt     DateTime?
+  updatedAt      DateTime           @updatedAt
+
+  @@index([status, priority, createdAt])
+  @@index([assignedTo, status])
+  @@map("escalation_queues")
+}
+
+model ConversationAnalytics {
+  id                String    @id @default(cuid())
+  conversationId    String    @unique
+  clientId          String
+  messageCount      Int       @default(0)
+  userMessageCount  Int       @default(0)
+  aiMessageCount    Int       @default(0)
+  intent            IntentType?
+  sentiment         String?
+  handoffReason     String?
+  avgResponseTimeMs Int?
+  totalCostUsed     Float     @default(0)
+  totalTokensUsed   Int       @default(0)
+  firstMessageAt    DateTime?
+  lastMessageAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([clientId, createdAt])
+  @@index([intent, createdAt])
+  @@map("conversation_analytics")
+}
+
+enum IntentType {
+  SUPPORT
+  SALES
+  COMPLAINT
+  FAQ
+  ESCALATION
+  GENERAL
+  FEEDBACK
+}
+
+enum EscalationQueueType {
+  SUPPORT
+  SALES
+  COMPLAINT
+  TECHNICAL
+  GENERAL
+}
+
+enum EscalationStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
 }
 
 enum LeadStatus {
