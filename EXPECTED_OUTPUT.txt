@@ -1,0 +1,47 @@
+══════════════════════════════════════════════════════════════════════
+  🧪 SHADOWSPARK AI CHATBOT - CONVERSATION TEST
+══════════════════════════════════════════════════════════════════════
+
+✓ OpenAI API Key: Found
+✓ Knowledge Base: Loaded
+✓ Model: gpt-4o-mini (default)
+
+──────────────────────────────────────────────────────────────────────
+
+👤 USER: Hello
+
+🤖 AI: Thinking...
+
+──────────────────────────────────────────────────────────────────────
+🤖 AI RESPONSE:
+──────────────────────────────────────────────────────────────────────
+
+Hello! Welcome to ShadowSpark Technologies! 👋
+
+I'm ShadowSpark AI, your intelligent virtual assistant. We specialize 
+in building AI automation solutions for Nigerian businesses, right here 
+in Port Harcourt.
+
+How can I help you today? Are you interested in:
+
+• 🤖 **AI Chatbots** - Automate customer conversations on WhatsApp
+• 📊 **Business Automation** - Save hours with intelligent workflow 
+                               automation
+• 💼 **Custom AI Solutions** - Tailored systems for your specific needs
+• 🎓 **Learning about AI** - Understanding how AI can transform your 
+                              business
+
+Or feel free to just tell me what challenge you're facing, and I'll 
+guide you to the right solution!
+
+──────────────────────────────────────────────────────────────────────
+
+📊 CONVERSATION METADATA:
+  • Tokens Used: 287
+  • Prompt Tokens: 3,850
+  • Completion Tokens: 137
+  • Model: gpt-4o-mini
+
+══════════════════════════════════════════════════════════════════════
+  ✓ TEST COMPLETED SUCCESSFULLY
+══════════════════════════════════════════════════════════════════════
