@@ -25,6 +25,9 @@
 # Example: SERVICE_URL="https://your-service.railway.app"
 SERVICE_URL="${SERVICE_URL:-http://localhost:3001}"
 
+# Configuration
+SLOW_RESPONSE_THRESHOLD=2  # seconds
+
 echo "=============================================="
 echo "Railway Deployment Verification"
 echo "=============================================="
@@ -108,9 +111,9 @@ if [ "$CONNECTIVITY_CODE" -eq 200 ]; then
     
     # Warning if response time is too slow
     if command -v bc &> /dev/null; then
-        IS_SLOW=$(echo "$RESPONSE_TIME > 2" | bc -l)
+        IS_SLOW=$(echo "$RESPONSE_TIME > $SLOW_RESPONSE_THRESHOLD" | bc -l)
         if [ "$IS_SLOW" -eq 1 ]; then
-            echo "   ⚠️  Warning: Response time is slow (>2s). Check server resources."
+            echo "   ⚠️  Warning: Response time is slow (>${SLOW_RESPONSE_THRESHOLD}s). Check server resources."
         fi
     fi
 else
