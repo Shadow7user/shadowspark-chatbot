@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:claude": "node server.js",
+    "test:chat": "node test-conversation.js",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "start:claude": "node server.js",
