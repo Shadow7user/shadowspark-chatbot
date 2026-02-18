@@ -29,6 +29,8 @@ export interface ConversationContext {
   }>;
   summary?: string;
   systemPrompt: string;
+  /** Optional user name from the channel (e.g., WhatsApp profile name) */
+  userName?: string;
   /** Message sent when conversation is escalated to a human agent */
   handoffMessage: string;
   /** Current status of the conversation — checked before deciding to call AI */

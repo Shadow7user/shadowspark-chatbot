@@ -55,7 +55,8 @@ export class MessageRouter {
       // 4. Load context (includes conversationStatus, handoffMessage, token counters)
       const context = await this.conversationManager.loadContext(
         conversationId,
-        config.DEFAULT_CLIENT_ID
+        config.DEFAULT_CLIENT_ID,
+        msg.userName
       );
 
       // 5. Resolve channel adapter early — needed by all branches below

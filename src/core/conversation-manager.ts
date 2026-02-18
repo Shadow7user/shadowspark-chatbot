@@ -109,6 +109,7 @@ export class ConversationManager {
   async loadContext(
     conversationId: string,
     clientId: string,
+    userName?: string,
   ): Promise<ConversationContext> {
     const [conversation, clientConfig, tokenStatus] = await Promise.all([
       prisma.conversation.findUniqueOrThrow({
@@ -136,6 +137,7 @@ export class ConversationManager {
       messages: conversation.messages.reverse(), // Chronological order
       summary: conversation.summary ?? undefined,
       systemPrompt,
+      userName,
       handoffMessage: clientConfig?.fallbackMessage ?? DEFAULT_HANDOFF_MESSAGE,
       conversationStatus: conversation.status,
       tokenUsageLimit: tokenStatus.cap ?? 100_000,
