@@ -100,4 +100,4 @@ The knowledge base includes:
 
 ## Build Process
 
-The build script (`npm run build`) copies JavaScript files from `src/config/` to `dist/config/` to ensure they're available in the production build.
+The TypeScript compiler (`tsc`) automatically copies JavaScript files from `src/` to `dist/` because `allowJs: true` is enabled in `tsconfig.json`. This ensures the knowledge base file is available in production builds without requiring additional build steps.
