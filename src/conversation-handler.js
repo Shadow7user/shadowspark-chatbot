@@ -253,16 +253,19 @@ function captureLead(userMessage, userId) {
  * Main message handler - routes incoming messages to appropriate responses
  * @param {string} userMessage - The incoming message text
  * @param {string} userId - User's identifier
+ * @param {Object} logger - Optional logger instance
  * @returns {string} Response message
  */
-function handleIncomingMessage(userMessage, userId) {
+export function handleIncomingMessage(userMessage, userId, logger = null) {
   const message = userMessage.trim().toUpperCase();
   
   // Check for lead capture (contains contact info)
   const lead = captureLead(userMessage, userId);
   if (lead) {
     // Log lead for follow-up (in production, save to database)
-    console.log("Lead captured:", lead);
+    if (logger) {
+      logger.info({ lead }, "Lead captured from conversation");
+    }
   }
   
   // Menu keywords
@@ -296,9 +299,10 @@ function handleIncomingMessage(userMessage, userId) {
     return getServicesMenu();
   }
   
-  // Check for service number selection (1-4 when in services context)
+  // Check for service number selection (dynamically based on services count)
   const serviceNum = parseInt(message);
-  if (!isNaN(serviceNum) && serviceNum >= 1 && serviceNum <= 4) {
+  const maxServices = Object.keys(SERVICES).length;
+  if (!isNaN(serviceNum) && serviceNum >= 1 && serviceNum <= maxServices) {
     const detail = getServiceDetail(serviceNum);
     if (detail) return detail;
   }
@@ -308,10 +312,4 @@ function handleIncomingMessage(userMessage, userId) {
 }
 
 // Export for use in webhook handler
-module.exports = {
-  handleIncomingMessage,
-  isBusinessHours,
-  captureLead,
-  SERVICES,
-  COMPANY_INFO,
-};
+export { isBusinessHours, captureLead, SERVICES, COMPANY_INFO };

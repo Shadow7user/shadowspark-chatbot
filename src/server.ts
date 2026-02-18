@@ -10,7 +10,7 @@ import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
 // Import ShadowSpark conversation handler
-const { handleIncomingMessage } = require("./conversation-handler.js");
+import { handleIncomingMessage } from "./conversation-handler.js";
 
 async function main() {
   // ── Production environment guard ────────────────────
@@ -118,7 +118,8 @@ async function main() {
         try {
           const response = handleIncomingMessage(
             normalized.text,
-            normalized.channelUserId
+            normalized.channelUserId,
+            logger
           );
           
           // Send response immediately via Twilio
