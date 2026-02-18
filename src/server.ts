@@ -130,13 +130,21 @@ async function main() {
             "ShadowSpark conversation handler processed message"
           );
         } catch (handlerError) {
-          logger.error({ handlerError }, "Conversation handler failed, falling back to queue");
+          logger.error({ handlerError }, "Conversation handler failed");
           
-          // Fallback to async AI processing if conversation handler fails
+          // Fallback to async AI processing if conversation handler fails AND Redis is available
           try {
             await enqueueMessage(normalized);
+            logger.info("Message enqueued for AI processing");
           } catch (enqueueError) {
-            logger.error({ enqueueError }, "Failed to enqueue message — Redis may be down");
+            logger.error(
+              { enqueueError },
+              "Failed to enqueue message - Redis not available. Message processing skipped."
+            );
+            // Send a fallback message to user
+            const fallbackMsg = 
+              "Sorry, I'm having trouble processing your message right now. Please try again later.";
+            await whatsappAdapter.sendMessage(normalized.channelUserId, fallbackMsg);
           }
         }
 
