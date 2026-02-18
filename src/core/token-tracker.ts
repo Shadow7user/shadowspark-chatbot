@@ -30,7 +30,7 @@ function getCurrentMonth(): string {
  */
 export async function checkTokenCap(clientId: string): Promise<TokenCapResult> {
   try {
-    const clientConfig = await prisma.client_configs.findUnique({
+    const clientConfig = await prisma.clientConfig.findUnique({
       where: { clientId },
       select: {
         monthlyTokenUsage: true,
@@ -58,7 +58,7 @@ export async function checkTokenCap(clientId: string): Promise<TokenCapResult> {
         `Resetting token usage for client ${clientId} (new month: ${currentMonth})`,
       );
 
-      await prisma.client_configs.update({
+      await prisma.clientConfig.update({
         where: { clientId },
         data: {
           monthlyTokenUsage: 0,
@@ -129,7 +129,7 @@ export async function incrementTokenUsage(
       tokens = 0;
     }
 
-    const clientConfig = await prisma.client_configs.findUnique({
+    const clientConfig = await prisma.clientConfig.findUnique({
       where: { clientId },
       select: {
         monthlyTokenUsage: true,
@@ -165,7 +165,7 @@ export async function incrementTokenUsage(
     const newUsage = currentUsage + tokens;
 
     // Update the database
-    await prisma.client_configs.update({
+    await prisma.clientConfig.update({
       where: { clientId },
       data: {
         monthlyTokenUsage: newUsage,
@@ -217,7 +217,7 @@ export async function incrementTokenUsage(
  */
 export async function getTokenUsage(clientId: string): Promise<TokenCapResult> {
   try {
-    const clientConfig = await prisma.client_configs.findUnique({
+    const clientConfig = await prisma.clientConfig.findUnique({
       where: { clientId },
       select: {
         monthlyTokenUsage: true,

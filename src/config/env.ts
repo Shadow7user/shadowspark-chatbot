@@ -235,3 +235,4 @@ export const config = loadConfig();
  * Inferred from the Zod schema for type safety
  */
 export type AppConfig = z.infer<typeof envSchema>;
+

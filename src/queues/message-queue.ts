@@ -1,6 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
-import config from "../config/env.js";
+import { config } from "../config/env.js";
 import type { NormalizedMessage } from "../types/index.js";
 import { MessageRouter } from "../core/message-router.js";
 import { logger } from "../core/logger.js";

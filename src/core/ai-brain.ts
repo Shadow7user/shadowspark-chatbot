@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import type { ConversationContext, ProcessingResult } from "../types/index.js";
-import config from "../config/env.js";
+import { config } from "../config/env.js";
 import { logger } from "./logger.js";
 
 export class AIBrain {
