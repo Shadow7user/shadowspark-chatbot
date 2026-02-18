@@ -1,6 +1,6 @@
 # ShadowSpark AI Chatbot
 
-WhatsApp auto-responder powered by GPT-4o-mini. Receives messages via WhatsApp Cloud API, processes with AI, responds automatically.
+WhatsApp auto-responder powered by Claude AI (via OpenRouter) or GPT-4o-mini (OpenAI). Receives messages via Twilio WhatsApp API, processes with AI, responds automatically.
 
 ## Setup
 
@@ -32,9 +32,21 @@ npm run dev
 4. Get: Phone Number ID, Access Token from WhatsApp > API Setup
 5. Set your Verify Token (any string you choose)
 
-### OpenAI
+### AI Provider (Choose one or both)
+
+#### OpenRouter (Recommended - Claude AI)
+1. https://openrouter.ai
+2. Create account and get API key
+3. Set OPENROUTER_API_KEY in .env
+4. Uses Claude Sonnet 4 for intelligent conversations
+
+#### OpenAI (Alternative)
 1. https://platform.openai.com/api-keys
-2. Create API key (use Raenest virtual card for billing)
+2. Create API key
+3. Set OPENAI_API_KEY in .env
+4. Uses GPT-4o-mini model
+
+**Note**: If both keys are configured, OpenRouter (Claude) will be used by default. If only OpenAI is configured, it will be used as fallback.
 
 ### Redis (Upstash - free tier)
 1. https://console.upstash.com
@@ -76,7 +88,7 @@ WhatsApp → POST /webhooks/whatsapp → BullMQ Queue → MessageRouter
                                                         ↓
                                               ConversationManager
                                                         ↓
-                                                    AIBrain (GPT-4o-mini)
+                                                    AIBrain (Claude/GPT)
                                                         ↓
                                               WhatsAppAdapter.sendMessage()
 ```
