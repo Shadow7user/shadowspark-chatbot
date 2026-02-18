@@ -1,7 +1,7 @@
 import type { NormalizedMessage, ChannelAdapter } from "../types/index.js";
 import { ConversationManager } from "./conversation-manager.js";
 import { AIBrain } from "./ai-brain.js";
-import { config } from "../config/env.js";
+import config from "../config/env.js";
 import { logger } from "./logger.js";
 
 // Keywords that trigger human handoff — matched case-insensitively as whole words.

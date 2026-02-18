@@ -111,7 +111,7 @@ export class ConversationManager {
     clientId: string,
   ): Promise<ConversationContext> {
     const [conversation, clientConfig, tokenStatus] = await Promise.all([
-      prisma.conversation.findUniqueOrThrow({
+      prisma.conversations.findUniqueOrThrow({
         where: { id: conversationId },
         include: {
           messages: {
@@ -121,7 +121,7 @@ export class ConversationManager {
           },
         },
       }),
-      prisma.clientConfig.findUnique({
+      prisma.client_configs.findUnique({
         where: { clientId },
       }),
       checkTokenCap(clientId),
@@ -153,7 +153,7 @@ export class ConversationManager {
     channelMessageId?: string,
   ): Promise<boolean> {
     try {
-      await prisma.message.create({
+      await prisma.messages.create({
         data: {
           conversationId,
           role: "USER",
@@ -178,7 +178,7 @@ export class ConversationManager {
    * Subsequent messages are held for a human agent — AI is not called.
    */
   async setHandoffStatus(conversationId: string): Promise<void> {
-    await prisma.conversation.update({
+    await prisma.conversations.update({
       where: { id: conversationId },
       data: { status: "HANDOFF", updatedAt: new Date() },
     });
@@ -201,10 +201,10 @@ export class ConversationManager {
     response: string,
   ): Promise<void> {
     await prisma.$transaction([
-      prisma.message.create({
+      prisma.messages.create({
         data: { conversationId, role: "ASSISTANT", content: response },
       }),
-      prisma.conversation.update({
+      prisma.conversations.update({
         where: { id: conversationId },
         data: { updatedAt: new Date() },
       }),

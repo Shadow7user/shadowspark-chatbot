@@ -1,5 +1,5 @@
 import twilio from "twilio";
-import { config } from "../config/env.js";
+import config from "../config/env.js";
 import type { ChannelAdapter, NormalizedMessage } from "../types/index.js";
 import { logger } from "../core/logger.js";
 

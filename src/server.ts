@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import { config } from "./config/env.js";
+import config from "./config/env.js";
 import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
@@ -65,7 +65,7 @@ async function main() {
   // ── Health check ────────────────────────────────────
   app.get("/health", async () => ({
     status: "ok",
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(),
     uptime: process.uptime(),
     provider: "twilio",
   }));
@@ -141,13 +141,13 @@ async function main() {
     if (secret !== config.ADMIN_SECRET) {
       return reply.status(401).send({ error: "Unauthorized" });
     }
-    const existing = await prisma.clientConfig.findUnique({
+    const existing = await prisma.client_configs.findUnique({
       where: { clientId: "shadowspark-demo" },
     });
 
     if (existing) return { message: "Demo config already exists", config: existing };
 
-    const demo = await prisma.clientConfig.create({
+    const demo = await prisma.client_configs.create({
       data: {
         clientId: "shadowspark-demo",
         businessName: "ShadowSpark Demo",
