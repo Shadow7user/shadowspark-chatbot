@@ -56,7 +56,7 @@ function isBusinessHours() {
   const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
   const watTime = new Date(utcTime + watOffset * 60000);
   
-  const day = watTime.toLocaleDateString("en-US", { weekday: "lowercase" });
+  const day = watTime.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
   const hour = watTime.getHours();
   
   const schedule = BUSINESS_HOURS[day];
