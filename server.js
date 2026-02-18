@@ -258,6 +258,15 @@ app.post('/webhooks/whatsapp/status', (req, res) => {
 // This is for the chatbot on shadowspark-tech.org
 // ============================================================
 
+// CORS middleware for website chatbot
+app.use('/api/chat', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://shadowspark-tech.org');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, sessionId } = req.body;
@@ -282,15 +291,6 @@ app.post('/api/chat', async (req, res) => {
       error: true,
     });
   }
-});
-
-// CORS for website chatbot
-app.use('/api/chat', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://shadowspark-tech.org');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
-  next();
 });
 
 // ============================================================
