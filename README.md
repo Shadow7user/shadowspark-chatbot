@@ -2,15 +2,19 @@
 
 WhatsApp auto-responder powered by GPT-4o-mini. Receives messages via **Twilio WhatsApp API**, processes with AI, responds automatically.
 
+## Documentation
+
+- **[QUICK_START.md](QUICK_START.md)** - Fast setup after cloning (credentials, deployment, Twilio setup)
+- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Complete setup guide with detailed instructions
+- **[README.md](README.md)** - This file (architecture and overview)
+
 ## Quick Setup
 
-For detailed setup instructions, see **[SETUP_GUIDE.md](SETUP_GUIDE.md)** which includes:
-- Complete Twilio WhatsApp setup (Sandbox & Business API)
-- Local development with ngrok
-- Railway deployment steps
-- Business profile configuration
-- Message template setup
-- Troubleshooting guide
+For complete setup instructions, see **[QUICK_START.md](QUICK_START.md)** which covers:
+1. Filling in `.env` with real credentials
+2. Message templates (optional - not needed for basic functionality)
+3. Deploying to Railway with `git push origin main`
+4. Setting up Twilio Console (webhook configuration and business profile)
 
 ### Quick Start (Development)
 
