@@ -6,7 +6,7 @@ import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
 import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
-import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
+import { enqueueMessage, startWorker, closeQueue, initializeQueue } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
 // Import ShadowSpark conversation handler
@@ -60,6 +60,9 @@ async function main() {
   const whatsappAdapter = new TwilioWhatsAppAdapter();
   const router = new MessageRouter();
   router.registerAdapter(whatsappAdapter);
+
+  // Initialize Redis/queue (async, non-blocking)
+  await initializeQueue();
 
   // Start BullMQ worker (store ref for graceful shutdown)
   const worker = startWorker(router);
@@ -141,9 +144,10 @@ async function main() {
               { enqueueError },
               "Failed to enqueue message - Redis not available. Message processing skipped."
             );
-            // Send a fallback message to user
+            // Send a helpful fallback message to user explaining the situation
             const fallbackMsg = 
-              "Sorry, I'm having trouble processing your message right now. Please try again later.";
+              "I'm having trouble processing that request right now. " +
+              "Please try our menu options by sending MENU, or try again later.";
             await whatsappAdapter.sendMessage(normalized.channelUserId, fallbackMsg);
           }
         }

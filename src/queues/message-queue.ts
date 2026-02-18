@@ -10,8 +10,21 @@ const QUEUE_NAME = "message-processing";
 // Redis connection is optional - if not configured, queue operations will be skipped
 let connection: IORedis | null = null;
 let messageQueue: Queue<NormalizedMessage> | null = null;
+let isInitialized = false;
 
-if (config.REDIS_URL) {
+/**
+ * Initialize Redis connection and message queue
+ * Called asynchronously during server startup
+ */
+export async function initializeQueue(): Promise<void> {
+  if (isInitialized) return;
+  isInitialized = true;
+
+  if (!config.REDIS_URL) {
+    logger.info("REDIS_URL not configured - message queue disabled, using synchronous processing");
+    return;
+  }
+
   try {
     connection = new IORedis(config.REDIS_URL, {
       maxRetriesPerRequest: null, // Required by BullMQ
@@ -40,36 +53,28 @@ if (config.REDIS_URL) {
     });
 
     // Try to connect
-    connection.connect().catch((err) => {
-      logger.warn(
-        { err: err.message },
-        "Redis connection failed - queue disabled, using synchronous processing"
-      );
-      connection = null;
-    });
+    await connection.connect();
 
-    if (connection) {
-      messageQueue = new Queue(QUEUE_NAME, {
-        // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
-        connection,
-        defaultJobOptions: {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 2000 },
-          removeOnComplete: { count: 1000 }, // Keep last 1000 completed
-          removeOnFail: { count: 5000 },
-        },
-      });
-    }
+    // Initialize queue only if connection succeeded
+    messageQueue = new Queue(QUEUE_NAME, {
+      // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000 },
+        removeOnComplete: { count: 1000 }, // Keep last 1000 completed
+        removeOnFail: { count: 5000 },
+      },
+    });
+    logger.info("Message queue initialized");
   } catch (error) {
     logger.warn(
       { error: error instanceof Error ? error.message : String(error) },
-      "Failed to initialize Redis - queue disabled"
+      "Redis connection failed - queue disabled, using synchronous processing"
     );
     connection = null;
     messageQueue = null;
   }
-} else {
-  logger.info("REDIS_URL not configured - message queue disabled, using synchronous processing");
 }
 
 /**
