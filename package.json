@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "description": "ShadowSpark AI Chatbot - WhatsApp, Telegram, Web",
   "main": "dist/server.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shadow7user/shadowspark-chatbot.git"
+  },
+  "license": "MIT",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc",
