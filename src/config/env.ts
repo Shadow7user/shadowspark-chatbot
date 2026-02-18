@@ -71,6 +71,13 @@ const envSchema = z
       .max(2, "OPENAI_TEMPERATURE must be between 0 and 2")
       .default(0.7),
 
+    // OpenRouter Configuration
+    OPENROUTER_API_KEY: z
+      .string()
+      .startsWith("sk-or-", "OPENROUTER_API_KEY must start with 'sk-or-'")
+      .min(20, "OPENROUTER_API_KEY appears to be invalid")
+      .optional(),
+
     // Redis Configuration
     REDIS_URL: z
       .string({
@@ -159,6 +166,11 @@ const envSchema = z
       if (!data.WEBHOOK_BASE_URL) {
         console.warn(
           "⚠️  Warning: WEBHOOK_BASE_URL is not set. Webhook functionality will be disabled.",
+        );
+      }
+      if (!data.OPENROUTER_API_KEY) {
+        console.warn(
+          "⚠️  Warning: OPENROUTER_API_KEY is not set. OpenRouter AI features will not be available.",
         );
       }
     }
