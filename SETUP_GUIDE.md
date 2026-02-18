@@ -309,35 +309,152 @@ For production WhatsApp numbers, Meta may require business verification:
    - Identity verification of business owner
 3. Verification can take 1-5 business days
 
-### 4.3 Message Templates (If Needed)
+### 4.3 Message Templates (For Proactive Messaging)
 
-For proactive messages (messages sent outside a 24-hour customer service window), you need approved message templates:
+> **Note:** This chatbot currently operates in **reactive mode** (responding to incoming messages), so message templates are **not required** for basic functionality.
+
+Message templates are only needed if you want to send proactive messages to users outside the 24-hour customer service window. Examples include:
+- Welcome messages when users first opt-in
+- Appointment reminders
+- Order confirmations
+- Marketing messages
+
+**When templates are required:**
+- Sending messages to users who haven't messaged you in the last 24 hours
+- Bulk messaging campaigns
+- Automated notifications
+
+**How to create templates (if needed):**
 
 1. Go to [Twilio Console](https://console.twilio.com)
 2. Navigate to **Messaging** → **Content Template Builder**
-3. Create templates for common scenarios:
-   - Welcome messages
-   - Appointment reminders
-   - Order confirmations
-   - etc.
+3. Click **Create new template**
+4. Fill in template details:
+   - **Template name**: e.g., `welcome_message`, `appointment_reminder`
+   - **Category**: Choose appropriate category (Utility, Marketing, Authentication)
+   - **Language**: Select language
+   - **Content**: Write your template with variables (e.g., `Hello {{1}}, welcome to our service!`)
+5. Click **Submit for approval**
+6. Wait for Meta approval (typically 24-48 hours)
 
-4. Submit templates for Meta approval (usually approved within 24 hours)
+**Using templates in code:**
 
-> **Note:** This chatbot currently operates in reactive mode (responds to incoming messages), so templates are not required for basic functionality.
+If you need to send template messages, you'll need to modify the Twilio adapter to use the Content SID:
+
+```typescript
+// Example: Sending a template message (not currently implemented)
+await client.messages.create({
+  from: config.TWILIO_WHATSAPP_NUMBER,
+  to: toNumber,
+  contentSid: "HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // Template SID from Twilio
+  contentVariables: JSON.stringify({
+    "1": "John Doe", // Variable values
+    "2": "Tomorrow at 3PM"
+  })
+});
+```
+
+For this implementation, reactive messaging without templates is sufficient for most use cases.
 
 ## Part 5: Post-Deployment Checklist
 
-After everything is set up, verify:
+After everything is set up, verify each item:
 
-- [ ] Health endpoint responds: `https://your-app.up.railway.app/health`
-- [ ] WhatsApp messages are received and processed
-- [ ] AI responses are sent successfully
-- [ ] Database is connected (check Railway logs)
-- [ ] Redis is connected (check Railway logs)
-- [ ] Environment variables are all set correctly
-- [ ] Admin secret is set (for production)
-- [ ] Twilio webhook signature validation is working
-- [ ] OpenAI API is responding
+### 5.1 Infrastructure Health Checks
+
+- [ ] **Health endpoint responds**: `curl https://your-app.up.railway.app/health`
+  - Should return `{"status":"ok"}`
+- [ ] **Database connected**: Check Railway logs for "Database connected successfully"
+- [ ] **Redis connected**: Check Railway logs for successful Redis connection
+- [ ] **No startup errors**: Review Railway logs for any fatal errors
+
+### 5.2 Environment Variable Verification
+
+- [ ] All environment variables are set in Railway dashboard
+- [ ] `NODE_ENV` is set to `production`
+- [ ] `ADMIN_SECRET` is set (minimum 16 characters)
+- [ ] `WEBHOOK_BASE_URL` matches your Railway URL exactly
+- [ ] All Twilio credentials are correct
+- [ ] OpenAI API key is valid and has credits
+
+### 5.3 Twilio Configuration
+
+- [ ] Webhook URL is configured in Twilio Console
+- [ ] Webhook URL uses HTTPS (required for production)
+- [ ] Webhook method is set to POST
+- [ ] Webhook URL format: `https://your-app.up.railway.app/webhooks/whatsapp`
+- [ ] For sandbox: Joined WhatsApp sandbox with your test number
+- [ ] For production: WhatsApp number is verified and active
+
+### 5.4 Functional Testing
+
+- [ ] **Send test message**: Send a WhatsApp message to your number
+- [ ] **Check message received**: Verify in Railway logs that message was received
+- [ ] **Verify AI processing**: Check logs for "AI response generated"
+- [ ] **Confirm response sent**: Check logs for "WhatsApp message sent via Twilio"
+- [ ] **Receive response**: Verify you received the AI response on WhatsApp
+
+### 5.5 Security Verification
+
+- [ ] Twilio signature validation is enabled in production
+- [ ] Admin endpoints require `x-admin-secret` header
+- [ ] Rate limiting is active
+- [ ] HTTPS is enforced for webhooks
+- [ ] No sensitive credentials in logs
+
+### 5.6 Performance & Monitoring
+
+- [ ] Response time is acceptable (< 10 seconds typically)
+- [ ] No memory leaks in Railway metrics
+- [ ] Token usage is being tracked correctly
+- [ ] Check Railway logs regularly for errors
+- [ ] Set up Railway notifications for deployment failures
+
+## Part 6: Common Post-Deployment Tasks
+
+### 6.1 Testing the Demo Configuration
+
+After deployment, seed the demo configuration:
+
+```bash
+# Set your admin secret in Railway first, then:
+curl -H "x-admin-secret: your-admin-secret" \
+  https://your-app.up.railway.app/setup/seed-demo
+```
+
+### 6.2 Monitoring Logs
+
+```bash
+# View real-time logs
+railway logs --follow
+
+# View recent logs
+railway logs --tail 100
+```
+
+### 6.3 Updating Environment Variables
+
+```bash
+# Update a single variable
+railway variables set OPENAI_MODEL="gpt-4"
+
+# View all variables
+railway variables
+```
+
+### 6.4 Redeploying After Changes
+
+```bash
+# Commit your changes
+git add .
+git commit -m "Your changes"
+
+# Push to trigger automatic deployment
+git push origin main
+
+# Or use Railway CLI
+railway up
+```
 
 ## Troubleshooting
 

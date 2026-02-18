@@ -9,7 +9,8 @@ import { config } from "../config/env.js"
 import { PrismaClient } from "@prisma/client"
 import { Redis } from "ioredis"
 import twilio from "twilio"
-import { OpenAI } from "openai"
+import { openai } from "@ai-sdk/openai"
+import { generateText } from "ai"
 
 interface ValidationResult {
   service: string
@@ -86,16 +87,28 @@ async function validateOpenAI() {
   }
   
   try {
-    const openai = new OpenAI({ apiKey: config.OPENAI_API_KEY })
-    const models = await openai.models.list()
+    // Test with a minimal API call using the AI SDK
+    const model = openai(config.OPENAI_MODEL)
+    const result = await generateText({
+      model,
+      messages: [{ role: "user", content: "test" }],
+      maxTokens: 5
+    })
     
-    if (models.data.length > 0) {
-      addResult("OpenAI", "✅ PASS", "API key is valid and active")
+    if (result.text) {
+      addResult("OpenAI", "✅ PASS", `API key is valid (model: ${config.OPENAI_MODEL})`)
     } else {
-      addResult("OpenAI", "⚠️ WARN", "API key valid but no models found")
+      addResult("OpenAI", "⚠️ WARN", "API key valid but no response generated")
     }
   } catch (error) {
-    addResult("OpenAI", "❌ FAIL", `Authentication failed: ${error instanceof Error ? error.message : String(error)}`)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes("401") || errorMessage.includes("authentication")) {
+      addResult("OpenAI", "❌ FAIL", "Authentication failed - check your API key")
+    } else if (errorMessage.includes("quota") || errorMessage.includes("insufficient")) {
+      addResult("OpenAI", "❌ FAIL", "API key valid but insufficient quota/credits")
+    } else {
+      addResult("OpenAI", "❌ FAIL", `API call failed: ${errorMessage}`)
+    }
   }
 }
 
