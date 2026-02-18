@@ -69,6 +69,26 @@ After deploy:
 4. Set verify token: same as WHATSAPP_VERIFY_TOKEN
 5. Subscribe to "messages" field
 
+### Verify Deployment
+
+After deploying to Railway, verify your deployment is working:
+
+```bash
+# Option 1: Test deployed service
+SERVICE_URL="https://your-service.railway.app" ./verify-deployment.sh
+
+# Option 2: Test local development server
+npm run dev  # In another terminal
+./verify-deployment.sh  # Uses localhost:3001 by default
+```
+
+The script checks:
+- ✅ Health endpoint is responding
+- ✅ Webhook endpoint is accessible
+- ✅ Server connectivity and response time
+
+Requirements: `curl` and `jq` must be installed
+
 ## Architecture
 
 ```
