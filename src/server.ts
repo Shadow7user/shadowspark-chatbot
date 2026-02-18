@@ -9,6 +9,8 @@ import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
 import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
+// Import ShadowSpark conversation handler
+const { handleIncomingMessage } = require("./conversation-handler.js");
 
 async function main() {
   // ── Production environment guard ────────────────────
@@ -112,11 +114,29 @@ async function main() {
           return reply.send("<Response></Response>");
         }
 
-        // Enqueue for async AI processing
+        // Use ShadowSpark conversation handler for menu-driven responses
         try {
-          await enqueueMessage(normalized);
-        } catch (enqueueError) {
-          logger.error({ enqueueError }, "Failed to enqueue message — Redis may be down");
+          const response = handleIncomingMessage(
+            normalized.text,
+            normalized.channelUserId
+          );
+          
+          // Send response immediately via Twilio
+          await whatsappAdapter.sendMessage(normalized.channelUserId, response);
+          
+          logger.info(
+            { from: normalized.channelUserId, message: normalized.text },
+            "ShadowSpark conversation handler processed message"
+          );
+        } catch (handlerError) {
+          logger.error({ handlerError }, "Conversation handler failed, falling back to queue");
+          
+          // Fallback to async AI processing if conversation handler fails
+          try {
+            await enqueueMessage(normalized);
+          } catch (enqueueError) {
+            logger.error({ enqueueError }, "Failed to enqueue message — Redis may be down");
+          }
         }
 
         // Return empty TwiML (response sent async via API)
