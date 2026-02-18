@@ -71,12 +71,11 @@ const envSchema = z
       .max(2, "OPENAI_TEMPERATURE must be between 0 and 2")
       .default(0.7),
 
-    // Redis Configuration
+    // Redis Configuration (optional - enables async message queue)
     REDIS_URL: z
-      .string({
-        required_error: "REDIS_URL is required",
-      })
-      .min(1, "REDIS_URL cannot be empty"),
+      .string()
+      .min(1, "REDIS_URL cannot be empty")
+      .optional(),
 
     // Server Configuration
     PORT: z.coerce

@@ -7,35 +7,86 @@ import { logger } from "../core/logger.js";
 
 const QUEUE_NAME = "message-processing";
 
-const connection = new IORedis(config.REDIS_URL, {
-  maxRetriesPerRequest: null, // Required by BullMQ
-  tls: config.REDIS_URL.startsWith("rediss://") ? {} : undefined,
-  retryStrategy: (times) => Math.min(times * 50, 2000),
-  reconnectOnError: (err) => {
-    const targetErrors = ["EPIPE", "ECONNRESET", "ETIMEDOUT"];
-    return targetErrors.some((e) => err.message.includes(e));
-  },
-});
+// Redis connection is optional - if not configured, queue operations will be skipped
+let connection: IORedis | null = null;
+let messageQueue: Queue<NormalizedMessage> | null = null;
+let isInitialized = false;
 
-connection.on("error", (err) => {
-  logger.error({ err: err.message }, "Redis connection error");
-});
+/**
+ * Initialize Redis connection and message queue
+ * Called asynchronously during server startup
+ */
+export async function initializeQueue(): Promise<void> {
+  if (isInitialized) return;
+  isInitialized = true;
 
-export const messageQueue = new Queue(QUEUE_NAME, {
-  // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
-  connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 2000 },
-    removeOnComplete: { count: 1000 }, // Keep last 1000 completed
-    removeOnFail: { count: 5000 },
-  },
-});
+  if (!config.REDIS_URL) {
+    logger.info("REDIS_URL not configured - message queue disabled, using synchronous processing");
+    return;
+  }
+
+  try {
+    connection = new IORedis(config.REDIS_URL, {
+      maxRetriesPerRequest: null, // Required by BullMQ
+      tls: config.REDIS_URL.startsWith("rediss://") ? {} : undefined,
+      retryStrategy: (times) => {
+        // Limit retries to avoid flooding logs
+        if (times > 10) {
+          logger.warn("Redis connection failed after 10 retries, giving up");
+          return null; // Stop retrying
+        }
+        return Math.min(times * 50, 2000);
+      },
+      reconnectOnError: (err) => {
+        const targetErrors = ["EPIPE", "ECONNRESET", "ETIMEDOUT"];
+        return targetErrors.some((e) => err.message.includes(e));
+      },
+      lazyConnect: true, // Don't connect immediately
+    });
+
+    connection.on("error", (err) => {
+      logger.error({ err: err.message }, "Redis connection error");
+    });
+
+    connection.on("ready", () => {
+      logger.info("Redis connection established");
+    });
+
+    // Try to connect
+    await connection.connect();
+
+    // Initialize queue only if connection succeeded
+    messageQueue = new Queue(QUEUE_NAME, {
+      // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000 },
+        removeOnComplete: { count: 1000 }, // Keep last 1000 completed
+        removeOnFail: { count: 5000 },
+      },
+    });
+    logger.info("Message queue initialized");
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error) },
+      "Redis connection failed - queue disabled, using synchronous processing"
+    );
+    connection = null;
+    messageQueue = null;
+  }
+}
 
 /**
  * Start the queue worker. Call once on server startup.
+ * Returns null if Redis is not configured.
  */
-export function startWorker(router: MessageRouter): Worker<NormalizedMessage> {
+export function startWorker(router: MessageRouter): Worker<NormalizedMessage> | null {
+  if (!connection || !messageQueue) {
+    logger.info("Redis not available - worker not started");
+    return null;
+  }
+
   const worker = new Worker<NormalizedMessage>(
     QUEUE_NAME,
     async (job) => {
@@ -71,8 +122,12 @@ export function startWorker(router: MessageRouter): Worker<NormalizedMessage> {
 /**
  * Enqueue a message for async processing.
  * Returns immediately — webhook can respond 200 fast.
+ * If Redis is not available, throws an error (caller should handle synchronously).
  */
 export async function enqueueMessage(msg: NormalizedMessage): Promise<void> {
+  if (!messageQueue) {
+    throw new Error("Message queue not available - Redis not configured");
+  }
   await messageQueue.add("process-message", msg, {
     priority: msg.channelType === "WHATSAPP" ? 1 : 2, // WhatsApp highest priority
   });
@@ -81,8 +136,8 @@ export async function enqueueMessage(msg: NormalizedMessage): Promise<void> {
 /**
  * Gracefully close queue, worker, and Redis connection.
  */
-export async function closeQueue(worker?: Worker): Promise<void> {
+export async function closeQueue(worker?: Worker | null): Promise<void> {
   if (worker) await worker.close();
-  await messageQueue.close();
-  await connection.quit();
+  if (messageQueue) await messageQueue.close();
+  if (connection) await connection.quit();
 }
