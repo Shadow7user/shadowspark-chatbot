@@ -2,6 +2,7 @@ import twilio from "twilio";
 import { config } from "../config/env.js";
 import type { ChannelAdapter, NormalizedMessage } from "../types/index.js";
 import { logger } from "../core/logger.js";
+import { withRetry } from "../core/retry.js";
 
 const client = twilio(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN);
 const MAX_MESSAGE_LENGTH = 1600;
@@ -9,21 +10,42 @@ const MAX_MESSAGE_LENGTH = 1600;
 export class TwilioWhatsAppAdapter implements ChannelAdapter {
   readonly channelType = "WHATSAPP" as const;
 
+  /**
+   * Send a WhatsApp message via Twilio with automatic retry on transient errors.
+   *
+   * Retries up to 5 times with exponential backoff on network errors and
+   * HTTP 429/500/502/503/504.  Non-retryable errors (bad phone number, auth
+   * failure, etc.) are thrown immediately so the caller can handle them.
+   *
+   * To extend the retry behavior, pass a custom `isRetryable` predicate to
+   * `withRetry` — see src/core/retry.ts for details.
+   */
   async sendMessage(to: string, text: string): Promise<void> {
     const toNumber = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
 
     try {
       const webhookBase = config.WEBHOOK_BASE_URL || `http://localhost:${config.PORT}`;
-      const message = await client.messages.create({
-        from: config.TWILIO_WHATSAPP_NUMBER,
-        to: toNumber,
-        body: text,
-        statusCallback: `${webhookBase}/health`,
-      });
+
+      // Wrap the Twilio SDK call with retry logic.
+      // `to` is used as the requestId so every log entry is traceable.
+      const message = await withRetry(
+        () =>
+          client.messages.create({
+            from: config.TWILIO_WHATSAPP_NUMBER,
+            to: toNumber,
+            body: text,
+            statusCallback: `${webhookBase}/health`,
+          }),
+        {
+          requestId: to,
+          operationName: "Twilio messages.create",
+        }
+      );
 
       logger.info({ to, sid: message.sid }, "WhatsApp message sent via Twilio");
     } catch (error) {
-      logger.error({ to, error }, "Twilio send failed");
+      // All retries exhausted (already logged by withRetry).
+      logger.error({ to, error }, "Twilio send failed after all retries");
       throw error;
     }
   }

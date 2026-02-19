@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import { config } from "./config/env.js";
+import { config, validateRuntimeConfig } from "./config/env.js";
 import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
@@ -11,6 +11,12 @@ import { prisma } from "./db/client.js";
 import twilio from "twilio";
 
 async function main() {
+  // ── Validate authentication credentials at startup ──
+  // Prints descriptive logs for each required key so operators can immediately
+  // see which credentials are present or missing before requests are served.
+  console.log("\n🔑 Validating runtime configuration…");
+  validateRuntimeConfig();
+
   // ── Production environment guard ────────────────────
   // Railway sets RAILWAY_ENVIRONMENT automatically. If deployed there but
   // NODE_ENV is not "production", the process refuses to start — avoids
