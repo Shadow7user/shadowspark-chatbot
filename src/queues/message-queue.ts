@@ -25,7 +25,7 @@ export const messageQueue = new Queue(QUEUE_NAME, {
   // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
   connection,
   defaultJobOptions: {
-    attempts: 3,
+    attempts: 5,
     backoff: { type: "exponential", delay: 2000 },
     removeOnComplete: { count: 1000 }, // Keep last 1000 completed
     removeOnFail: { count: 5000 },

@@ -236,3 +236,83 @@ export const config = loadConfig();
  */
 export type AppConfig = z.infer<typeof envSchema>;
 
+/**
+ * Validates that all required authentication credentials are present and
+ * produces a descriptive log entry for each key (present / missing / format).
+ *
+ * Call this once at server startup — after `config` is loaded — so operators
+ * immediately see which keys are properly configured.
+ *
+ * If any required auth key is absent or clearly malformed, a descriptive
+ * message is printed to stderr. The application is still allowed to start
+ * (fail-open) because `loadConfig()` already exits for truly missing required
+ * variables; this function is a best-effort human-readable summary.
+ *
+ * To extend: add new credential checks following the same pattern below.
+ */
+export function validateRuntimeConfig(): void {
+  const issues: string[] = [];
+
+  // ── OpenAI ────────────────────────────────────────────────────────────────
+  if (!config.OPENAI_API_KEY) {
+    issues.push("OPENAI_API_KEY is missing — AI responses will fail");
+  } else if (!config.OPENAI_API_KEY.startsWith("sk-")) {
+    issues.push(
+      `OPENAI_API_KEY does not start with 'sk-' — verify the key is correct (got: ${config.OPENAI_API_KEY.slice(0, 6)}...)`
+    );
+  } else {
+    console.log(`  ✅ OPENAI_API_KEY   present (model: ${config.OPENAI_MODEL})`);
+  }
+
+  // ── Twilio ────────────────────────────────────────────────────────────────
+  if (!config.TWILIO_ACCOUNT_SID) {
+    issues.push("TWILIO_ACCOUNT_SID is missing — WhatsApp messaging will fail");
+  } else if (!config.TWILIO_ACCOUNT_SID.startsWith("AC")) {
+    issues.push(
+      `TWILIO_ACCOUNT_SID does not start with 'AC' — verify the SID (got: ${config.TWILIO_ACCOUNT_SID.slice(0, 6)}...)`
+    );
+  } else {
+    console.log(`  ✅ TWILIO_ACCOUNT_SID present (${config.TWILIO_ACCOUNT_SID.slice(0, 8)}...)`);
+  }
+
+  if (!config.TWILIO_AUTH_TOKEN) {
+    issues.push("TWILIO_AUTH_TOKEN is missing — WhatsApp messaging will fail");
+  } else {
+    console.log("  ✅ TWILIO_AUTH_TOKEN present");
+  }
+
+  if (!config.TWILIO_WHATSAPP_NUMBER) {
+    issues.push("TWILIO_WHATSAPP_NUMBER is missing — WhatsApp messaging will fail");
+  } else {
+    console.log(`  ✅ TWILIO_WHATSAPP_NUMBER: ${config.TWILIO_WHATSAPP_NUMBER}`);
+  }
+
+  // ── Database ──────────────────────────────────────────────────────────────
+  if (!config.DATABASE_URL) {
+    issues.push("DATABASE_URL is missing — all database operations will fail");
+  } else {
+    console.log("  ✅ DATABASE_URL     present");
+  }
+
+  // ── Production-only requirements ─────────────────────────────────────────
+  if (config.NODE_ENV === "production") {
+    if (!config.ADMIN_SECRET) {
+      issues.push("ADMIN_SECRET is missing in production — admin endpoints are unprotected");
+    }
+    if (!config.WEBHOOK_BASE_URL) {
+      issues.push("WEBHOOK_BASE_URL is missing in production — Twilio signature validation will use localhost");
+    }
+  }
+
+  // ── Summary ───────────────────────────────────────────────────────────────
+  if (issues.length > 0) {
+    console.error("\n⚠️  Runtime configuration warnings:");
+    issues.forEach((msg) => console.error(`  ⚠️  ${msg}`));
+    console.error(
+      "\n💡 Fix the above issues before deploying to production.\n"
+    );
+  } else {
+    console.log("✅ All authentication credentials validated successfully.\n");
+  }
+}
+

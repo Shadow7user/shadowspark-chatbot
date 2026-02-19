@@ -3,12 +3,22 @@ import { openai } from "@ai-sdk/openai";
 import type { ConversationContext, ProcessingResult } from "../types/index.js";
 import { config } from "../config/env.js";
 import { logger } from "./logger.js";
+import { withRetry } from "./retry.js";
 
 export class AIBrain {
   private model = openai(config.OPENAI_MODEL);
 
   /**
-   * Generate AI response from conversation context
+   * Generate AI response from conversation context.
+   *
+   * Retries up to 5 times with exponential backoff on transient errors
+   * (network failures, HTTP 429/500/502/503/504). Non-retryable errors
+   * (auth, bad request) fail immediately. After all retries are exhausted,
+   * a user-friendly fallback message is returned so the conversation can
+   * continue gracefully.
+   *
+   * To extend the retry behavior (e.g. add new retryable status codes),
+   * pass a custom `isRetryable` option to `withRetry` — see src/core/retry.ts.
    */
   async generateResponse(ctx: ConversationContext): Promise<ProcessingResult> {
     const startTime = Date.now();
@@ -36,12 +46,21 @@ export class AIBrain {
         });
       }
 
-      const result = await generateText({
-        model: this.model,
-        messages,
-        maxTokens: config.OPENAI_MAX_TOKENS,
-        temperature: config.OPENAI_TEMPERATURE,
-      });
+      // Wrap the AI SDK call with retry logic.
+      // conversationId is used as the requestId so every log entry is traceable.
+      const result = await withRetry(
+        () =>
+          generateText({
+            model: this.model,
+            messages,
+            maxTokens: config.OPENAI_MAX_TOKENS,
+            temperature: config.OPENAI_TEMPERATURE,
+          }),
+        {
+          requestId: ctx.conversationId,
+          operationName: "OpenAI generateText",
+        }
+      );
 
       const latency = Date.now() - startTime;
       logger.info(
@@ -59,7 +78,12 @@ export class AIBrain {
         tokensUsed: result.usage?.totalTokens,
       };
     } catch (error) {
-      logger.error({ error, conversationId: ctx.conversationId }, "AI generation failed");
+      // All retries exhausted (already logged by withRetry) — return a
+      // user-friendly message so the conversation does not go silent.
+      logger.error(
+        { error, conversationId: ctx.conversationId },
+        "AI generation failed after all retries — returning fallback response"
+      );
 
       return {
         response:
