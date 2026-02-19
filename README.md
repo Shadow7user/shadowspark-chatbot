@@ -2,6 +2,9 @@
 
 WhatsApp auto-responder powered by GPT-4o-mini. Receives messages via WhatsApp Cloud API, processes with AI, responds automatically.
 
+**ShadowSpark Technologies** - AI Automation Solutions  
+Location: Owerri, Imo State, Nigeria
+
 ## Setup
 
 ```bash
