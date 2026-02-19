@@ -158,7 +158,7 @@ function sleep(ms: number): Promise<void> {
 
 export class AIBrain {
   private model = openai(config.OPENAI_MODEL);
-  private maxRetries = 5;
+  private maxRetries = 5; // Maximum number of retry attempts after initial failure
 
   /**
    * Generate AI response from conversation context with retry logic
@@ -168,8 +168,9 @@ export class AIBrain {
     let lastError: unknown = null;
     let lastErrorType: AIErrorType = AIErrorType.UNKNOWN;
     let attemptsMade = 0;
+    const totalAttempts = this.maxRetries + 1; // Initial attempt + retries
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt < totalAttempts; attempt++) {
       attemptsMade = attempt + 1;
       try {
         // Build messages array
@@ -227,10 +228,10 @@ export class AIBrain {
             error,
             errorType: lastErrorType,
             conversationId: ctx.conversationId,
-            attempt: attempt + 1,
-            maxRetries: this.maxRetries,
+            attempt: attemptsMade,
+            totalAttempts,
           },
-          `AI generation failed (attempt ${attempt + 1}/${this.maxRetries + 1})`
+          `AI generation failed (attempt ${attemptsMade}/${totalAttempts})`
         );
 
         // Don't retry for non-retryable errors

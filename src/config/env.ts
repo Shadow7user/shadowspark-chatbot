@@ -230,7 +230,7 @@ function loadConfig(): z.infer<typeof envSchema> {
  */
 async function validateOpenAIKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
   try {
-    // We validate the format extensively, but not make actual API calls
+    // We validate the format extensively, but do not make actual API calls
     // at startup to avoid delays. The format validation in the schema is sufficient.
     
     // Check for project or organization key formats (sk-proj- or sk-org-)
