@@ -167,8 +167,10 @@ export class AIBrain {
     const startTime = Date.now();
     let lastError: unknown = null;
     let lastErrorType: AIErrorType = AIErrorType.UNKNOWN;
+    let attemptsMade = 0;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      attemptsMade = attempt + 1;
       try {
         // Build messages array
         const messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
@@ -267,7 +269,7 @@ export class AIBrain {
         error: lastError,
         errorType: lastErrorType,
         conversationId: ctx.conversationId,
-        totalAttempts: lastErrorType === AIErrorType.UNKNOWN || !isRetryableError(lastErrorType) ? 1 : this.maxRetries + 1,
+        totalAttempts: attemptsMade,
         totalLatencyMs: totalLatency,
       },
       "AI generation failed after all attempts"

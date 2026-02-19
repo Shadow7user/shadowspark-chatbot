@@ -234,7 +234,7 @@ async function validateOpenAIKey(apiKey: string): Promise<{ valid: boolean; erro
     // We'll validate the format extensively, but not make actual API calls
     // at startup to avoid delays. The format validation in the schema is sufficient.
     
-    // Check if key has been revoked pattern (starts with sk-proj- or sk-org-)
+    // Check for project or organization key formats (sk-proj- or sk-org-)
     if (apiKey.startsWith("sk-proj-") || apiKey.startsWith("sk-org-")) {
       // These are valid key formats for project and organization keys
       return { valid: true };
