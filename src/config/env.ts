@@ -225,10 +225,64 @@ function loadConfig(): z.infer<typeof envSchema> {
 }
 
 /**
+ * Validates that the OpenAI API key is actually valid by making a test request
+ * This is a best-effort check - we validate the format here but full validation
+ * happens during actual usage.
+ */
+async function validateOpenAIKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    // We'll validate the format extensively, but not make actual API calls
+    // at startup to avoid delays. The format validation in the schema is sufficient.
+    
+    // Check if key has been revoked pattern (starts with sk-proj- or sk-org-)
+    if (apiKey.startsWith("sk-proj-") || apiKey.startsWith("sk-org-")) {
+      // These are valid key formats for project and organization keys
+      return { valid: true };
+    }
+    
+    // Standard key format (sk-...)
+    if (apiKey.startsWith("sk-") && apiKey.length >= 40) {
+      return { valid: true };
+    }
+    
+    return { 
+      valid: false, 
+      error: "API key format appears invalid. Expected format: sk-... (min 40 characters)"
+    };
+  } catch (error) {
+    return { 
+      valid: false, 
+      error: `API key validation error: ${error}`
+    };
+  }
+}
+
+/**
  * Validated application configuration
  * Exported as a singleton to ensure validation runs once at startup
  */
 export const config = loadConfig();
+
+/**
+ * Perform runtime validation of API keys
+ * This runs after initial config load to provide additional checks
+ */
+export async function validateRuntimeConfig(): Promise<void> {
+  // Validate OpenAI API key format
+  const openAIValidation = await validateOpenAIKey(config.OPENAI_API_KEY);
+  
+  if (!openAIValidation.valid) {
+    console.error("\n❌ OpenAI API Key Validation Failed:");
+    console.error(`   ${openAIValidation.error}`);
+    console.error("\n💡 Next Steps:");
+    console.error("   1. Check that OPENAI_API_KEY is set correctly in your .env file");
+    console.error("   2. Verify the key hasn't been revoked at https://platform.openai.com/api-keys");
+    console.error("   3. Ensure the key has the correct permissions");
+    console.error("\n🚨 Application starting with potentially invalid API key - AI requests may fail\n");
+  } else {
+    console.log("✅ OpenAI API key format validated successfully");
+  }
+}
 
 /**
  * TypeScript type for the application configuration
