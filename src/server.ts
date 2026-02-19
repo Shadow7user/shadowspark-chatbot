@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import { config } from "./config/env.js";
+import { config, validateRuntimeConfig } from "./config/env.js";
 import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
@@ -26,6 +26,10 @@ async function main() {
     );
     process.exit(1);
   }
+
+  // ── Validate runtime configuration ─────────────────
+  // Check API keys and provide helpful error messages if invalid
+  await validateRuntimeConfig();
 
   // ── Initialize Fastify ──────────────────────────────
   const app = Fastify({
