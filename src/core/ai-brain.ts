@@ -207,7 +207,7 @@ export class AIBrain {
             conversationId: ctx.conversationId,
             tokensUsed: result.usage?.totalTokens,
             latencyMs: latency,
-            attempts: attempt + 1,
+            attempts: attemptsMade,
           },
           "AI response generated successfully"
         );

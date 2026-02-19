@@ -225,13 +225,12 @@ function loadConfig(): z.infer<typeof envSchema> {
 }
 
 /**
- * Validates that the OpenAI API key is actually valid by making a test request
- * This is a best-effort check - we validate the format here but full validation
- * happens during actual usage.
+ * Validates the OpenAI API key format at startup.
+ * This performs format validation only - actual API validity is checked during usage.
  */
 async function validateOpenAIKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
   try {
-    // We'll validate the format extensively, but not make actual API calls
+    // We validate the format extensively, but not make actual API calls
     // at startup to avoid delays. The format validation in the schema is sufficient.
     
     // Check for project or organization key formats (sk-proj- or sk-org-)
