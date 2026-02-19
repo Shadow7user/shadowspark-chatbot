@@ -6,7 +6,7 @@ import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
 import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
-import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
+import { enqueueMessage, startWorker, closeQueue, messageQueue } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
 
@@ -63,12 +63,34 @@ async function main() {
   const worker = startWorker(router);
 
   // ── Health check ────────────────────────────────────
-  app.get("/health", async () => ({
-    status: "ok",
-    timestamp: new Date(),
-    uptime: process.uptime(),
-    provider: "twilio",
-  }));
+  app.get("/health", async (_request, reply) => {
+    const checks: Record<string, "ok" | "fail"> = {};
+
+    // DB connectivity
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      checks.database = "ok";
+    } catch {
+      checks.database = "fail";
+    }
+
+    // Redis connectivity (via messageQueue)
+    try {
+      await messageQueue.getJobCounts();
+      checks.redis = "ok";
+    } catch {
+      checks.redis = "fail";
+    }
+
+    const allOk = Object.values(checks).every((v) => v === "ok");
+    return reply.status(allOk ? 200 : 503).send({
+      status: allOk ? "ok" : "degraded",
+      timestamp: new Date(),
+      uptime: process.uptime(),
+      provider: "twilio",
+      checks,
+    });
+  });
 
   // ── Twilio WhatsApp webhook (POST) ─────────────────
   app.post<{ Body: TwilioWebhookBody }>(
