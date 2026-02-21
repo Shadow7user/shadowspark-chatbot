@@ -64,6 +64,8 @@ const suite1Cases: Array<{ msg: string; expectedMode: ModeKey }> = [
   { msg: "I run a small startup, what's affordable?", expectedMode: "sme" },
   { msg: "What's the price for the demo?", expectedMode: "sales" },
   { msg: "Tell me about ShadowSpark", expectedMode: "default" },
+  { msg: "Help me deploy to Railway and fix the error", expectedMode: "technical" },
+  { msg: "Can you audit the security of my API?", expectedMode: "audit" },
 ];
 
 for (const { msg, expectedMode } of suite1Cases) {
@@ -151,7 +153,9 @@ for (const mode of Object.keys(PERSONALITY_MODES) as ModeKey[]) {
   const fakeMsg = mode === "default" ? "hello" :
     mode === "confused" ? "explain this" :
     mode === "enterprise" ? "enterprise scale" :
-    mode === "sme" ? "small startup" : "show me demo";
+    mode === "sme" ? "small startup" :
+    mode === "technical" ? "deploy and fix error" :
+    mode === "audit" ? "audit security" : "show me demo";
 
   const result = buildEnhancedSystemPrompt(longBase, fakeMsg);
 
