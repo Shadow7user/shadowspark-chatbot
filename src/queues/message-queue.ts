@@ -21,6 +21,10 @@ connection.on("error", (err) => {
   logger.error({ err: err.message }, "Redis connection error");
 });
 
+connection.on("ready", () => {
+  logger.info("Redis connected and ready");
+});
+
 export const messageQueue = new Queue(QUEUE_NAME, {
   // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
   connection,
@@ -86,3 +90,8 @@ export async function closeQueue(worker?: Worker): Promise<void> {
   await messageQueue.close();
   await connection.quit();
 }
+
+/**
+ * Returns the underlying Redis connection for health checks.
+ */
+export { connection as redisConnection };
