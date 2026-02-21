@@ -1,12 +1,14 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import { openai } from "@ai-sdk/openai";
+import { generateText } from "ai";
 import { config } from "./config/env.js";
 import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
 import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
-import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
+import { enqueueMessage, startWorker, closeQueue, redisConnection } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
 
@@ -24,6 +26,24 @@ async function main() {
       "NODE_ENV must be 'production' in Railway deployment. " +
         "Set NODE_ENV=production in Railway service variables and redeploy."
     );
+    process.exit(1);
+  }
+
+  // ── Verify database connection ───────────────────────
+  try {
+    await prisma.$connect();
+    logger.info("Database connected successfully");
+  } catch (error) {
+    logger.fatal({ error }, "Database connection failed — cannot start");
+    process.exit(1);
+  }
+
+  // ── Verify Redis connection ──────────────────────────
+  try {
+    await redisConnection.ping();
+    logger.info("Redis ping successful");
+  } catch (error) {
+    logger.fatal({ error }, "Redis connection failed — cannot start");
     process.exit(1);
   }
 
@@ -76,6 +96,37 @@ async function main() {
     async (request, reply) => {
       try {
         const body = request.body;
+
+        // ── Diagnostic ping triggers ─────────────────────
+        if (body.Body === "PING_WEBHOOK") {
+          reply.header("Content-Type", "text/plain");
+          return reply.send("Webhook reachable");
+        }
+
+        if (body.Body === "PING_OPENAI") {
+          // In production, require admin secret to prevent unauthorized OpenAI usage
+          if (config.NODE_ENV === "production") {
+            const adminSecret = request.headers["x-admin-secret"] as string;
+            if (!config.ADMIN_SECRET || adminSecret !== config.ADMIN_SECRET) {
+              reply.header("Content-Type", "text/plain");
+              return reply.send("Unauthorized");
+            }
+          }
+          try {
+            await generateText({
+              model: openai("gpt-4o-mini"),
+              messages: [{ role: "user", content: "ping" }],
+              maxTokens: 5,
+            });
+            reply.header("Content-Type", "text/plain");
+            return reply.send("OpenAI Connected");
+          } catch (err) {
+            reply.header("Content-Type", "text/plain");
+            return reply.send(
+              `OpenAI Error: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
 
         // Validate request is from Twilio
         const twilioSignature = request.headers["x-twilio-signature"] as string;
@@ -177,9 +228,18 @@ Understand Pidgin English if customers use it.`,
   // ── Start server ────────────────────────────────────
   try {
     await app.listen({ port: config.PORT, host: "0.0.0.0" });
-    logger.info(`🚀 ShadowSpark Chatbot running on port ${config.PORT}`);
-    logger.info(`📱 WhatsApp webhook (Twilio): POST /webhooks/whatsapp`);
-    logger.info(`❤️  Health check: GET /health`);
+    logger.info(
+      {
+        environment: config.NODE_ENV,
+        port: config.PORT,
+        redisStatus: "connected",
+        databaseStatus: "connected",
+        openAiKeyLoaded: !!config.OPENAI_API_KEY,
+        webhookRoute: "POST /webhooks/whatsapp",
+        healthRoute: "GET /health",
+      },
+      "🚀 ShadowSpark Chatbot startup complete"
+    );
   } catch (error) {
     logger.fatal({ error }, "Server failed to start");
     process.exit(1);
@@ -206,5 +266,15 @@ Understand Pidgin English if customers use it.`,
 
 main().catch((error) => {
   console.error("Fatal startup error:", error);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  logger.fatal({ reason, promise: String(promise) }, "Unhandled promise rejection — shutting down");
+  process.exit(1);
+});
+
+process.on("uncaughtException", (error) => {
+  logger.fatal({ error }, "Uncaught exception — shutting down");
   process.exit(1);
 });
