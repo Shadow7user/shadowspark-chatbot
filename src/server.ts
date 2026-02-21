@@ -6,9 +6,11 @@ import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
 import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
-import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
+import { enqueueMessage, startWorker, closeQueue, initializeQueue } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
+// Import ShadowSpark conversation handler
+import { handleIncomingMessage } from "./conversation-handler.js";
 
 async function main() {
   // ── Production environment guard ────────────────────
@@ -58,6 +60,9 @@ async function main() {
   const whatsappAdapter = new TwilioWhatsAppAdapter();
   const router = new MessageRouter();
   router.registerAdapter(whatsappAdapter);
+
+  // Initialize Redis/queue (async, non-blocking)
+  await initializeQueue();
 
   // Start BullMQ worker (store ref for graceful shutdown)
   const worker = startWorker(router);
@@ -112,11 +117,39 @@ async function main() {
           return reply.send("<Response></Response>");
         }
 
-        // Enqueue for async AI processing
+        // Use ShadowSpark conversation handler for menu-driven responses
         try {
-          await enqueueMessage(normalized);
-        } catch (enqueueError) {
-          logger.error({ enqueueError }, "Failed to enqueue message — Redis may be down");
+          const response = handleIncomingMessage(
+            normalized.text,
+            normalized.channelUserId,
+            logger
+          );
+          
+          // Send response immediately via Twilio
+          await whatsappAdapter.sendMessage(normalized.channelUserId, response);
+          
+          logger.info(
+            { from: normalized.channelUserId, message: normalized.text },
+            "ShadowSpark conversation handler processed message"
+          );
+        } catch (handlerError) {
+          logger.error({ handlerError }, "Conversation handler failed");
+          
+          // Fallback to async AI processing if conversation handler fails AND Redis is available
+          try {
+            await enqueueMessage(normalized);
+            logger.info("Message enqueued for AI processing");
+          } catch (enqueueError) {
+            logger.error(
+              { enqueueError },
+              "Failed to enqueue message - Redis not available. Message processing skipped."
+            );
+            // Send a helpful fallback message to user explaining the situation
+            const fallbackMsg = 
+              "I'm having trouble processing that request right now. " +
+              "Please try our menu options by sending MENU, or try again later.";
+            await whatsappAdapter.sendMessage(normalized.channelUserId, fallbackMsg);
+          }
         }
 
         // Return empty TwiML (response sent async via API)

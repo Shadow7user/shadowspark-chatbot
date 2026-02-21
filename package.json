@@ -5,11 +5,13 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && cp src/conversation-handler.js dist/",
     "start": "node dist/server.js",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "setup:profile": "node scripts/setup-whatsapp-profile.js",
+    "setup:templates": "node scripts/setup-message-templates.js"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.0.0",
