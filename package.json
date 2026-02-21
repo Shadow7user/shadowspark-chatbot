@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "migrate:deploy": "prisma migrate deploy",
+    "validate:prod": "tsx src/scripts/validate-deployment.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.0.0",
