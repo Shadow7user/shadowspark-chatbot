@@ -71,10 +71,14 @@ export function startWorker(router: MessageRouter): Worker<NormalizedMessage> {
 /**
  * Enqueue a message for async processing.
  * Returns immediately — webhook can respond 200 fast.
+ * Priority: lower number = higher priority (1-5)
  */
 export async function enqueueMessage(msg: NormalizedMessage): Promise<void> {
+  // Use message priority if provided, otherwise default by channel
+  const priority = msg.priority ?? (msg.channelType === "WHATSAPP" ? 2 : 3);
+  
   await messageQueue.add("process-message", msg, {
-    priority: msg.channelType === "WHATSAPP" ? 1 : 2, // WhatsApp highest priority
+    priority,
   });
 }
 

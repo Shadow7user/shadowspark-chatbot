@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { config } from "./config/env.js";
@@ -9,6 +10,14 @@ import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
 import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
+import {
+  getPendingEscalations,
+  assignEscalation,
+  markInProgress,
+  resolveEscalation,
+  getEscalationStats,
+} from "./core/admin-queue.js";
+import { getClientAnalytics, getTopIntents } from "./core/analytics-logger.js";
 
 async function main() {
   // ── Production environment guard ────────────────────
@@ -173,6 +182,209 @@ Understand Pidgin English if customers use it.`,
 
     return { message: "Demo config created", config: demo };
   });
+
+  // ── Admin Escalation Queue Endpoints ───────────────
+  // Note: These endpoints are protected by:
+  // 1. Global rate limiter (100 req/min) applied to all routes
+  // 2. Admin authentication via x-admin-secret header
+  // This provides adequate protection against abuse while keeping route config simple
+  
+  // Helper: Check admin auth
+  const checkAdminAuth = (request: FastifyRequest, reply: FastifyReply): boolean => {
+    if (!config.ADMIN_SECRET) {
+      reply.status(404).send({ error: "Not found" });
+      return false;
+    }
+    const secret = request.headers["x-admin-secret"] as string;
+    if (secret !== config.ADMIN_SECRET) {
+      reply.status(401).send({ error: "Unauthorized" });
+      return false;
+    }
+    return true;
+  };
+
+  // Get pending escalations
+  app.get(
+    "/admin/escalations",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { queueType, limit } = request.query as {
+        queueType?: string;
+        limit?: string;
+      };
+
+      const escalations = await getPendingEscalations(
+        queueType as any,
+        limit ? parseInt(limit) : 50
+      );
+
+      return { escalations, count: escalations.length };
+    }
+  );
+
+  // Get escalation statistics
+  app.get(
+    "/admin/escalations/stats",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { queueType } = request.query as { queueType?: string };
+      const stats = await getEscalationStats(queueType as any);
+
+      return { stats };
+    }
+  );
+
+  // Assign escalation to admin
+  app.post<{ Params: { id: string }; Body: { assignedTo: string } }>(
+    "/admin/escalations/:id/assign",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { id } = request.params;
+      const { assignedTo } = request.body;
+
+      if (!assignedTo) {
+        return reply.status(400).send({ error: "assignedTo is required" });
+      }
+
+      const escalation = await assignEscalation(id, assignedTo);
+      if (!escalation) {
+        return reply.status(404).send({ error: "Escalation not found" });
+      }
+
+      return { escalation };
+    }
+  );
+
+  // Mark escalation as in progress
+  app.post<{ Params: { id: string } }>(
+    "/admin/escalations/:id/progress",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { id } = request.params;
+      const success = await markInProgress(id);
+
+      if (!success) {
+        return reply.status(404).send({ error: "Escalation not found" });
+      }
+
+      return { message: "Escalation marked in progress" };
+    }
+  );
+
+  // Resolve escalation
+  app.post<{ Params: { id: string } }>(
+    "/admin/escalations/:id/resolve",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { id } = request.params;
+      const success = await resolveEscalation(id);
+
+      if (!success) {
+        return reply.status(404).send({ error: "Escalation not found" });
+      }
+
+      return { message: "Escalation resolved" };
+    }
+  );
+
+  // ── Analytics Endpoints ─────────────────────────────
+  // Get client analytics
+  app.get(
+    "/analytics/client/:clientId",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { clientId } = request.params as { clientId: string };
+      const { startDate, endDate } = request.query as {
+        startDate?: string;
+        endDate?: string;
+      };
+
+      const analytics = await getClientAnalytics(
+        clientId,
+        startDate ? new Date(startDate) : undefined,
+        endDate ? new Date(endDate) : undefined
+      );
+
+      return { clientId, analytics };
+    }
+  );
+
+  // Get top intents for a client
+  app.get(
+    "/analytics/intents/:clientId",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { clientId } = request.params as { clientId: string };
+      const { limit, startDate } = request.query as {
+        limit?: string;
+        startDate?: string;
+      };
+
+      const topIntents = await getTopIntents(
+        clientId,
+        limit ? parseInt(limit) : 5,
+        startDate ? new Date(startDate) : undefined
+      );
+
+      return { clientId, topIntents };
+    }
+  );
+
+  // Get overall analytics dashboard
+  app.get(
+    "/analytics/dashboard",
+    async (request, reply) => {
+      if (!checkAdminAuth(request, reply)) return;
+
+      const { startDate, endDate } = request.query as {
+        startDate?: string;
+        endDate?: string;
+      };
+
+      const dateFilter = {
+        ...(startDate && { gte: new Date(startDate) }),
+        ...(endDate && { lte: new Date(endDate) }),
+      };
+
+      const [
+        totalConversations,
+        totalMessages,
+        conversationsByIntent,
+        avgResponseTime,
+      ] = await Promise.all([
+        prisma.conversationAnalytics.count({
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+        }),
+        prisma.conversationAnalytics.aggregate({
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+          _sum: { messageCount: true },
+        }),
+        prisma.conversationAnalytics.groupBy({
+          by: ["intent"],
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+          _count: { id: true },
+        }),
+        prisma.conversationAnalytics.aggregate({
+          where: startDate || endDate ? { createdAt: dateFilter } : {},
+          _avg: { avgResponseTimeMs: true },
+        }),
+      ]);
+
+      return {
+        totalConversations,
+        totalMessages: totalMessages._sum.messageCount ?? 0,
+        avgResponseTimeMs: Math.round(avgResponseTime._avg.avgResponseTimeMs ?? 0),
+        conversationsByIntent,
+      };
+    }
+  );
 
   // ── Start server ────────────────────────────────────
   try {

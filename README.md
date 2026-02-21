@@ -1,6 +1,16 @@
 # ShadowSpark AI Chatbot
 
-WhatsApp auto-responder powered by GPT-4o-mini. Receives messages via WhatsApp Cloud API, processes with AI, responds automatically.
+WhatsApp auto-responder powered by GPT-4o-mini with intelligent intent classification, priority routing, cost management, and admin escalation queues.
+
+## ✨ Enhanced Features
+
+- **🎯 Intent Classification**: Automatically categorizes messages (Support, Sales, Complaint, FAQ, Escalation, Feedback)
+- **⚡ Priority Routing**: Smart message prioritization based on intent, VIP status, and conversation history
+- **💰 Cost Guards**: Pre-emptive cost control with daily and monthly limits
+- **🚨 Admin Escalation Queue**: Priority-based queue for human intervention with dedicated API endpoints
+- **📊 Analytics Logging**: Comprehensive conversation analytics and insights
+
+For detailed documentation on these features, see [ENHANCED_FEATURES.md](./ENHANCED_FEATURES.md).
 
 ## Setup
 
@@ -89,3 +99,13 @@ WhatsApp → POST /webhooks/whatsapp → BullMQ Queue → MessageRouter
 | GET | /webhooks/whatsapp | Meta webhook verification |
 | POST | /webhooks/whatsapp | Incoming messages |
 | GET | /setup/seed-demo | Create demo client config |
+| **Admin Escalation Queue** | | |
+| GET | /admin/escalations | Get pending escalations (requires x-admin-secret) |
+| GET | /admin/escalations/stats | Get escalation statistics (requires x-admin-secret) |
+| POST | /admin/escalations/:id/assign | Assign escalation to admin (requires x-admin-secret) |
+| POST | /admin/escalations/:id/progress | Mark escalation in progress (requires x-admin-secret) |
+| POST | /admin/escalations/:id/resolve | Resolve escalation (requires x-admin-secret) |
+| **Analytics** | | |
+| GET | /analytics/client/:clientId | Get client analytics summary (requires x-admin-secret) |
+| GET | /analytics/intents/:clientId | Get top intents for client (requires x-admin-secret) |
+| GET | /analytics/dashboard | Get overall analytics dashboard (requires x-admin-secret) |

@@ -3,6 +3,18 @@ import { ConversationManager } from "./conversation-manager.js";
 import { AIBrain } from "./ai-brain.js";
 import { config } from "../config/env.js";
 import { logger } from "./logger.js";
+import { classifyIntent, shouldEscalate, requiresHumanAttention } from "./intent-classifier.js";
+import { computeMessagePriority, getEscalationQueueType } from "./priority-router.js";
+import {
+  estimateContextTokens,
+  estimateCost,
+  checkCostGuard,
+  incrementCostUsage,
+  getCostLimitMessage,
+} from "./cost-guard.js";
+import { createEscalation, hasActiveEscalation } from "./admin-queue.js";
+import { recordAnalytics, recordAIResponse, recordHandoff } from "./analytics-logger.js";
+import { prisma } from "../db/client.js";
 
 // Keywords that trigger human handoff — matched case-insensitively as whole words.
 const HANDOFF_PATTERN = /\b(agent|human|support)\b/i;
@@ -22,10 +34,14 @@ export class MessageRouter {
    * 1. Resolve user + conversation
    * 2. Dedup check
    * 3. Load context
-   * 4. Handoff detection (keywords: agent / human / support)
-   * 5. Token limit guard
-   * 6. AI generation + token usage increment
-   * 7. Send response
+   * 4. Intent classification
+   * 5. Priority calculation
+   * 6. Handoff detection (keywords + intent-based)
+   * 7. Cost guard (before AI call)
+   * 8. Token limit guard
+   * 9. AI generation + usage tracking
+   * 10. Send response
+   * 11. Analytics logging
    */
   async processMessage(msg: NormalizedMessage): Promise<void> {
     const startTime = Date.now();
@@ -33,6 +49,13 @@ export class MessageRouter {
     try {
       // 1. Resolve user
       const userId = await this.conversationManager.resolveUser(msg);
+
+      // Get user info for VIP status
+      const user = await prisma.chatUser.findUnique({
+        where: { id: userId },
+        select: { isVip: true },
+      });
+      const isVipUser = user?.isVip ?? false;
 
       // 2. Resolve conversation
       const conversationId = await this.conversationManager.resolveConversation(
@@ -58,6 +81,46 @@ export class MessageRouter {
         config.DEFAULT_CLIENT_ID
       );
 
+      // 4a. Classify intent
+      const intentClassification = classifyIntent(msg.text);
+      logger.info(
+        {
+          conversationId,
+          intent: intentClassification.intent,
+          confidence: intentClassification.confidence,
+        },
+        "Intent classified"
+      );
+
+      // 4b. Compute priority
+      const priorityScore = computeMessagePriority(
+        intentClassification.intent,
+        intentClassification.confidence,
+        isVipUser,
+        context.messages.length
+      );
+
+      // Update the saved message with intent and priority
+      await prisma.message.updateMany({
+        where: {
+          conversationId,
+          channelMessageId: msg.channelMessageId,
+        },
+        data: {
+          intent: intentClassification.intent,
+          confidence: intentClassification.confidence,
+          priority: priorityScore.priority,
+        },
+      });
+
+      // 4c. Record analytics for user message
+      recordAnalytics({
+        conversationId,
+        clientId: context.clientId,
+        intent: intentClassification.intent,
+        responseTimeMs: Date.now() - startTime,
+      }).catch((err) => logger.warn({ err }, "Failed to record initial analytics"));
+
       // 5. Resolve channel adapter early — needed by all branches below
       const adapter = this.adapters.get(msg.channelType);
       if (!adapter) {
@@ -75,14 +138,69 @@ export class MessageRouter {
         return;
       }
 
-      // ── Handoff: keyword trigger ────────────────────────────────────────────
-      if (HANDOFF_PATTERN.test(msg.text)) {
+      // ── Handoff: keyword trigger or intent-based escalation ────────────────
+      const needsEscalation =
+        HANDOFF_PATTERN.test(msg.text) ||
+        shouldEscalate(intentClassification.intent, intentClassification.confidence) ||
+        requiresHumanAttention(intentClassification.intent, context.messages.length);
+
+      if (needsEscalation) {
         await this.conversationManager.setHandoffStatus(conversationId);
         await this.conversationManager.saveAIResponse(conversationId, context.handoffMessage);
         await adapter.sendMessage(msg.channelUserId, context.handoffMessage);
+
+        // Create escalation queue entry if not already exists
+        const hasEscalation = await hasActiveEscalation(conversationId);
+        if (!hasEscalation) {
+          const queueType = getEscalationQueueType(intentClassification.intent);
+          await createEscalation(
+            conversationId,
+            queueType,
+            priorityScore.priority,
+            priorityScore.reason
+          );
+          logger.info(
+            {
+              conversationId,
+              queueType,
+              priority: priorityScore.priority,
+            },
+            "Escalation queue entry created"
+          );
+        }
+
+        // Record handoff in analytics
+        recordHandoff(conversationId, priorityScore.reason).catch((err) =>
+          logger.warn({ err }, "Failed to record handoff analytics")
+        );
+
         logger.info(
-          { conversationId, channel: msg.channelType },
+          { conversationId, channel: msg.channelType, intent: intentClassification.intent },
           "Conversation escalated to HANDOFF"
+        );
+        return;
+      }
+
+      // ── Cost guard (check before AI call) ──────────────────────────────────
+      const contextTokens = estimateContextTokens(context.messages);
+      const costEstimate = estimateCost(contextTokens);
+      const costGuardResult = await checkCostGuard(
+        context.clientId,
+        costEstimate.estimatedCost
+      );
+
+      if (!costGuardResult.allowed) {
+        const limitMsg = getCostLimitMessage(costGuardResult.reason ?? "Cost limit reached");
+        await this.conversationManager.saveAIResponse(conversationId, limitMsg);
+        await adapter.sendMessage(msg.channelUserId, limitMsg);
+        logger.warn(
+          {
+            conversationId,
+            clientId: context.clientId,
+            reason: costGuardResult.reason,
+            estimatedCost: costGuardResult.estimatedCost,
+          },
+          "Cost limit would be exceeded — AI call skipped"
         );
         return;
       }
@@ -110,6 +228,9 @@ export class MessageRouter {
       const result = await this.aiBrain.generateResponse(context);
       await this.conversationManager.saveAIResponse(conversationId, result.response);
 
+      // Calculate actual cost
+      const actualCost = result.tokensUsed ? result.tokensUsed * 0.0000015 : 0;
+
       // Increment token counter — non-blocking, failure is logged and swallowed
       if (result.tokensUsed) {
         this.conversationManager
@@ -117,6 +238,16 @@ export class MessageRouter {
           .catch((err) =>
             logger.warn({ err, clientId: context.clientId }, "Failed to update token usage")
           );
+
+        // Increment cost usage
+        incrementCostUsage(context.clientId, actualCost).catch((err) =>
+          logger.warn({ err, clientId: context.clientId }, "Failed to update cost usage")
+        );
+
+        // Record AI response in analytics
+        recordAIResponse(conversationId, result.tokensUsed, actualCost).catch((err) =>
+          logger.warn({ err }, "Failed to record AI response analytics")
+        );
       }
 
       await adapter.sendMessage(msg.channelUserId, result.response);
@@ -126,8 +257,11 @@ export class MessageRouter {
         {
           conversationId,
           channel: msg.channelType,
+          intent: intentClassification.intent,
+          priority: priorityScore.priority,
           totalLatencyMs: totalLatency,
           tokensUsed: result.tokensUsed,
+          costUsed: actualCost,
         },
         "Message processed successfully"
       );
