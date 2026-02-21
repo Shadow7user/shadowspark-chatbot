@@ -1,8 +1,22 @@
 # ShadowSpark AI Chatbot
 
-WhatsApp auto-responder powered by GPT-4o-mini. Receives messages via WhatsApp Cloud API, processes with AI, responds automatically.
+WhatsApp auto-responder powered by GPT-4o-mini. Receives messages via **Twilio WhatsApp API**, processes with AI, responds automatically.
 
-## Setup
+## Documentation
+
+- **[QUICK_START.md](QUICK_START.md)** - Fast setup after cloning (credentials, deployment, Twilio setup)
+- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Complete setup guide with detailed instructions
+- **[README.md](README.md)** - This file (architecture and overview)
+
+## Quick Setup
+
+For complete setup instructions, see **[QUICK_START.md](QUICK_START.md)** which covers:
+1. Filling in `.env` with real credentials
+2. Message templates (optional - not needed for basic functionality)
+3. Deploying to Railway with `git push origin main`
+4. Setting up Twilio Console (webhook configuration and business profile)
+
+### Quick Start (Development)
 
 ```bash
 # 1. Install dependencies
@@ -10,7 +24,7 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Fill in all values (see below)
+# Fill in all values (see SETUP_GUIDE.md for details)
 
 # 3. Generate Prisma client + push schema
 npx prisma generate
@@ -23,27 +37,24 @@ npx prisma db push
 npm run dev
 ```
 
-## Required Accounts
+## Required Services
 
-### WhatsApp Cloud API
-1. Go to https://developers.facebook.com
-2. Create a Meta App → select "Business" type
-3. Add WhatsApp product
-4. Get: Phone Number ID, Access Token from WhatsApp > API Setup
-5. Set your Verify Token (any string you choose)
+### Twilio (WhatsApp Integration)
+- **Sandbox**: Quick setup for development/testing
+- **Business API**: Production-ready with business verification
+- Get credentials from [Twilio Console](https://console.twilio.com)
 
 ### OpenAI
-1. https://platform.openai.com/api-keys
-2. Create API key (use Raenest virtual card for billing)
+- API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+- GPT-4o-mini model (default)
 
 ### Redis (Upstash - free tier)
-1. https://console.upstash.com
-2. Create Redis database
-3. Copy REDIS_URL
+- Message queue with BullMQ
+- Get from [Upstash Console](https://console.upstash.com)
 
-### Database (Neon)
-- Create a new database `shadowspark_chatbot` in your existing Neon project
-- Or use a separate schema in the existing database
+### Database (Neon PostgreSQL)
+- Conversation history and client configs
+- Get from [Neon Console](https://console.neon.tech)
 
 ## Deployment (Railway)
 
@@ -55,19 +66,22 @@ npm i -g @railway/cli
 railway login
 railway init
 
-# Set environment variables
-railway variables set WHATSAPP_VERIFY_TOKEN=xxx ...
+# Set environment variables (see SETUP_GUIDE.md for full list)
+railway variables set TWILIO_ACCOUNT_SID="ACxxx..."
+railway variables set TWILIO_AUTH_TOKEN="xxx"
+railway variables set OPENAI_API_KEY="sk-..."
+# ... set all other variables
 
 # Deploy
-railway up
+git push origin main
 ```
 
-After deploy:
+After deployment:
 1. Copy your Railway URL (e.g. `https://xxx.railway.app`)
-2. Go to Meta App > WhatsApp > Configuration
-3. Set webhook URL: `https://xxx.railway.app/webhooks/whatsapp`
-4. Set verify token: same as WHATSAPP_VERIFY_TOKEN
-5. Subscribe to "messages" field
+2. Set `WEBHOOK_BASE_URL` in Railway: `railway variables set WEBHOOK_BASE_URL="https://xxx.railway.app"`
+3. Go to [Twilio Console](https://console.twilio.com) → Messaging → WhatsApp Settings
+4. Set webhook URL: `https://xxx.railway.app/webhooks/whatsapp`
+5. Save and test by sending a WhatsApp message
 
 ## Architecture
 
