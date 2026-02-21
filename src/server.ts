@@ -6,9 +6,21 @@ import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
 import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
-import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
+import { enqueueMessage, startWorker, closeQueue, isRedisReady } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
 import twilio from "twilio";
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+
+// ── Unhandled rejection / exception guards ───────────
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error({ reason, promise }, "Unhandled promise rejection");
+});
+
+process.on("uncaughtException", (error) => {
+  logger.fatal({ error }, "Uncaught exception — shutting down");
+  process.exit(1);
+});
 
 async function main() {
   // ── Production environment guard ────────────────────
@@ -24,6 +36,17 @@ async function main() {
       "NODE_ENV must be 'production' in Railway deployment. " +
         "Set NODE_ENV=production in Railway service variables and redeploy."
     );
+    process.exit(1);
+  }
+
+  // ── Verify database connection on boot ──────────────
+  let dbStatus = "connected";
+  try {
+    await prisma.$connect();
+    logger.info("✅ Database connected successfully");
+  } catch (dbError) {
+    dbStatus = "failed";
+    logger.fatal({ dbError }, "❌ Database connection failed — cannot start server");
     process.exit(1);
   }
 
@@ -93,6 +116,31 @@ async function main() {
         if (!isValid && config.NODE_ENV === "production") {
           logger.warn("Invalid Twilio signature");
           return reply.status(403).send("Forbidden");
+        }
+
+        // ── Diagnostic mode triggers (post-auth) ────────
+        // Protected by Twilio signature validation in production.
+        // Rate-limited globally to 100 req/min by @fastify/rate-limit.
+        if (body.Body === "PING_WEBHOOK") {
+          reply.header("Content-Type", "text/plain");
+          return reply.send("Webhook reachable");
+        }
+
+        if (body.Body === "PING_OPENAI") {
+          try {
+            await generateText({
+              model: openai("gpt-4o-mini"),
+              messages: [{ role: "user", content: "ping" }],
+              maxTokens: 5,
+            });
+            reply.header("Content-Type", "text/plain");
+            return reply.send("OpenAI Connected");
+          } catch (openaiError) {
+            const msg = openaiError instanceof Error ? openaiError.message : String(openaiError);
+            logger.error({ openaiError }, "PING_OPENAI diagnostic failed");
+            reply.header("Content-Type", "text/plain");
+            return reply.send(`OpenAI Error: ${msg}`);
+          }
         }
 
         // Log webhook for debugging (non-blocking — don't let DB failures kill the handler)
@@ -177,7 +225,19 @@ Understand Pidgin English if customers use it.`,
   // ── Start server ────────────────────────────────────
   try {
     await app.listen({ port: config.PORT, host: "0.0.0.0" });
-    logger.info(`🚀 ShadowSpark Chatbot running on port ${config.PORT}`);
+
+    // ── Startup log block ────────────────────────────
+    logger.info(
+      {
+        environment: config.NODE_ENV,
+        port: config.PORT,
+        redisStatus: isRedisReady() ? "connected" : "connecting",
+        databaseStatus: dbStatus,
+        openAiKeyLoaded: Boolean(config.OPENAI_API_KEY),
+        webhookRouteRegistered: "POST /webhooks/whatsapp",
+      },
+      "🚀 ShadowSpark Chatbot startup complete"
+    );
     logger.info(`📱 WhatsApp webhook (Twilio): POST /webhooks/whatsapp`);
     logger.info(`❤️  Health check: GET /health`);
   } catch (error) {
