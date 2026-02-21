@@ -147,26 +147,17 @@ async function main() {
 
     if (existing) return { message: "Demo config already exists", config: existing };
 
+    // Import ShadowSpark knowledge base
+    const { SYSTEM_PROMPT } = require("./config/shadowspark-knowledge.js");
+
     const demo = await prisma.clientConfig.create({
       data: {
         clientId: "shadowspark-demo",
-        businessName: "ShadowSpark Demo",
-        systemPrompt: `You are a friendly AI assistant for a Nigerian business.
-
-Your role:
-- Answer customer questions about products and services
-- Help with order inquiries and status checks
-- Collect customer contact information when appropriate
-- Be warm, professional, and use Nigerian English naturally
-- Keep responses concise (under 200 words)
-- If you can't help, offer to connect them with a human agent
-
-When greeting, be warm: "Hello! Welcome to [Business Name]. How can I help you today?"
-For pricing, always use Naira (₦).
-Understand Pidgin English if customers use it.`,
-        welcomeMessage: "Hello! 👋 Welcome! How can I help you today?",
+        businessName: "ShadowSpark Technologies",
+        systemPrompt: SYSTEM_PROMPT,
+        welcomeMessage: "Hello! 👋 Welcome to ShadowSpark Technologies. I'm your AI assistant. How can I help you today?",
         fallbackMessage:
-          "I'm sorry, I didn't quite understand that. Could you rephrase? Or type 'agent' to speak with someone.",
+          "Let me connect you with our team for personalized assistance. Please hold on.",
         channels: { whatsapp: true, telegram: false, web: false },
       },
     });

@@ -1,8 +1,15 @@
 # ShadowSpark AI Chatbot
 
-WhatsApp auto-responder powered by GPT-4o-mini. Receives messages via WhatsApp Cloud API, processes with AI, responds automatically.
+AI-powered WhatsApp and web chatbot with two implementation options:
 
-## Setup
+1. **TypeScript Server** (recommended) - Production-ready with PostgreSQL, Redis, analytics
+2. **Claude Server** - Simpler Express-based server with Claude AI
+
+## Quick Start
+
+### Option 1: TypeScript Server (Full-Featured)
+
+WhatsApp chatbot powered by GPT-4o-mini with database persistence and advanced features.
 
 ```bash
 # 1. Install dependencies
@@ -10,18 +17,35 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Fill in all values (see below)
+# Fill in: DATABASE_URL, TWILIO_*, OPENAI_API_KEY, REDIS_URL
 
 # 3. Generate Prisma client + push schema
 npx prisma generate
 npx prisma db push
 
-# 4. Seed demo config
-# After starting: GET http://localhost:3001/setup/seed-demo
-
-# 5. Run development server
+# 4. Run development server
 npm run dev
 ```
+
+Server starts on port 3001. See full setup guide in sections below.
+
+### Option 2: Claude Server (Simpler)
+
+Lightweight Express server with Claude AI and in-memory conversation storage.
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+# Fill in: TWILIO_*, ANTHROPIC_API_KEY
+
+# 3. Run development server
+npm run dev:claude
+```
+
+Server starts on port 3000. See [CLAUDE_SERVER.md](CLAUDE_SERVER.md) for details.
 
 ## Required Accounts
 
@@ -89,3 +113,30 @@ WhatsApp → POST /webhooks/whatsapp → BullMQ Queue → MessageRouter
 | GET | /webhooks/whatsapp | Meta webhook verification |
 | POST | /webhooks/whatsapp | Incoming messages |
 | GET | /setup/seed-demo | Create demo client config |
+
+## Server Implementations
+
+This repository includes two server implementations:
+
+### TypeScript Server (`src/server.ts`)
+- **AI Engine**: OpenAI (GPT-4o-mini)
+- **Framework**: Fastify
+- **Storage**: PostgreSQL + Redis
+- **Features**: Database persistence, async queues, analytics, token tracking
+- **Run**: `npm run dev` or `npm start`
+- **Port**: 3001 (default)
+
+**Best for**: Production deployments, multi-client setups, advanced features
+
+### Claude Server (`server.js`)
+- **AI Engine**: Anthropic Claude (Sonnet 4)
+- **Framework**: Express  
+- **Storage**: In-memory (Map)
+- **Features**: Simple conversation history, easy deployment
+- **Run**: `npm run dev:claude` or `npm run start:claude`
+- **Port**: 3000 (default)
+
+**Best for**: Quick prototypes, single-client deployments, Claude AI preference
+
+See [CLAUDE_SERVER.md](CLAUDE_SERVER.md) for detailed Claude server documentation.
+
