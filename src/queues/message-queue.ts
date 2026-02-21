@@ -7,6 +7,8 @@ import { logger } from "../core/logger.js";
 
 const QUEUE_NAME = "message-processing";
 
+let redisReady = false;
+
 const connection = new IORedis(config.REDIS_URL, {
   maxRetriesPerRequest: null, // Required by BullMQ
   tls: config.REDIS_URL.startsWith("rediss://") ? {} : undefined,
@@ -20,6 +22,16 @@ const connection = new IORedis(config.REDIS_URL, {
 connection.on("error", (err) => {
   logger.error({ err: err.message }, "Redis connection error");
 });
+
+connection.on("ready", () => {
+  redisReady = true;
+  logger.info("✅ Redis connected and ready");
+});
+
+/** Returns true once the Redis "ready" event has fired. */
+export function isRedisReady(): boolean {
+  return redisReady;
+}
 
 export const messageQueue = new Queue(QUEUE_NAME, {
   // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
