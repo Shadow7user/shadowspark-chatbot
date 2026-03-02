@@ -1,0 +1,60 @@
+[34m
+╔════════════════════════════════════════════╗
+║  Phase 1D Enterprise Hardening Test Suite ║
+╚════════════════════════════════════════════╝[0m
+
+[34m═══ Environment Validation Tests ═══[0m
+[34mℹ[0m Testing environment configuration...
+✅ Configuration loaded successfully (development mode)
+[32m✓[0m Environment configuration loaded successfully
+[34mℹ[0m Testing required environment variables...
+[32m✓[0m All required environment variables present
+[34mℹ[0m Testing production environment requirements...
+[34mℹ[0m Running in development mode - production checks skipped
+[34mℹ[0m Testing Twilio WhatsApp number format...
+[32m✓[0m Twilio number format correct: whatsapp:+14155238886
+
+[34m═══ Database Schema Tests ═══[0m
+[34mℹ[0m Testing ClientConfig schema...
+[32m✓[0m ClientConfig has all token tracking fields
+[34mℹ[0m Testing Conversation status enum...
+[32m✓[0m Conversation status enum includes: ACTIVE, PAUSED, HANDOFF, CLOSED
+[34mℹ[0m Testing Message deduplication field...
+[32m✓[0m Message has channelMessageId field for deduplication
+
+[34m═══ Token Tracking Tests ═══[0m
+[34mℹ[0m Testing checkTokenCap()...
+[32m✓[0m checkTokenCap() returns valid structure: {"exceeded":false,"currentUsage":248,"cap":null,"remaining":null}
+[34mℹ[0m Testing getTokenUsage()...
+[32m✓[0m getTokenUsage() returns current usage: 248 tokens
+[34mℹ[0m Testing incrementTokenUsage()...
+[32m✓[0m incrementTokenUsage() correctly incremented: 248 → 348
+[34mℹ[0m Testing month reset logic...
+[00:03:06.630] [32mINFO[39m (25539): [36mIncremented token usage for client shadowspark-demo: +100 tokens (total: 348)[39m
+[32m✓[0m Month tracking correct: 2026-02
+[34mℹ[0m Testing token cap enforcement...
+[33m⚠[0m No token cap set (unlimited usage allowed)
+
+[34m═══ Handoff Logic Tests ═══[0m
+[34mℹ[0m Testing handoff keyword detection...
+[32m✓[0m Handoff keyword pattern correct (7/7 tests passed)
+[34mℹ[0m Testing ConversationStatus enum...
+[32m✓[0m ConversationStatus enum working: ACTIVE
+
+[34m═══ Security Features Tests ═══[0m
+[34mℹ[0m Testing admin secret protection...
+[32m✓[0m Admin secret protection working (401 Unauthorized)
+[34mℹ[0m Testing health endpoint...
+[32m✓[0m Health endpoint accessible and working
+[34mℹ[0m Testing webhook endpoint...
+[32m✓[0m Webhook endpoint accepts POST requests
+
+[34m═══ Test Summary ═══[0m
+[32m✓ Passed:[0m   16
+[31m✗ Failed:[0m   0
+[33m⚠ Warnings:[0m 1
+
+[34mOverall:[0m 100.0% tests passed (16/16)
+
+[32m✓ All critical tests passed! Phase 1D implementation verified.[0m
+
