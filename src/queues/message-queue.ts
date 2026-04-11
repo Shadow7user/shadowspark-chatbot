@@ -22,7 +22,6 @@ connection.on("error", (err) => {
 });
 
 export const messageQueue = new Queue(QUEUE_NAME, {
-  // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
   connection,
   defaultJobOptions: {
     attempts: 3,
@@ -46,7 +45,6 @@ export function startWorker(router: MessageRouter): Worker<NormalizedMessage> {
       await router.processMessage(job.data);
     },
     {
-      // @ts-expect-error ioredis version mismatch between top-level (5.9.3) and bullmq bundled (5.9.2)
       connection,
       concurrency: 5, // Process 5 messages in parallel
       limiter: {

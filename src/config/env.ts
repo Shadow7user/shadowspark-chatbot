@@ -18,29 +18,28 @@ const envSchema = z
 
     DIRECT_URL: z.string().url("DIRECT_URL must be a valid URL").optional(),
 
-    // Twilio Configuration
-    TWILIO_ACCOUNT_SID: z
+    // WhatsApp Cloud API Configuration
+    WHATSAPP_PHONE_NUMBER_ID: z
       .string({
-        required_error: "TWILIO_ACCOUNT_SID is required",
+        required_error: "WHATSAPP_PHONE_NUMBER_ID is required",
       })
-      .startsWith("AC", "TWILIO_ACCOUNT_SID must start with 'AC'")
-      .min(34, "TWILIO_ACCOUNT_SID must be at least 34 characters"),
+      .min(1, "WHATSAPP_PHONE_NUMBER_ID cannot be empty"),
 
-    TWILIO_AUTH_TOKEN: z
-      .string({
-        required_error: "TWILIO_AUTH_TOKEN is required",
-      })
-      .min(32, "TWILIO_AUTH_TOKEN must be at least 32 characters"),
+    WHATSAPP_TOKEN: z
+      .string()
+      .min(1, "WHATSAPP_TOKEN cannot be empty")
+      .optional(),
 
-    TWILIO_WHATSAPP_NUMBER: z
+    WHATSAPP_ACCESS_TOKEN: z
+      .string()
+      .min(1, "WHATSAPP_ACCESS_TOKEN cannot be empty")
+      .optional(),
+
+    WHATSAPP_VERIFY_TOKEN: z
       .string({
-        required_error: "TWILIO_WHATSAPP_NUMBER is required",
+        required_error: "WHATSAPP_VERIFY_TOKEN is required",
       })
-      .min(1, "TWILIO_WHATSAPP_NUMBER cannot be empty")
-      .regex(
-        /^whatsapp:\+\d+$/,
-        "TWILIO_WHATSAPP_NUMBER must be in format: whatsapp:+1234567890",
-      ),
+      .min(1, "WHATSAPP_VERIFY_TOKEN cannot be empty"),
 
     // OpenAI Configuration
     OPENAI_API_KEY: z
@@ -77,6 +76,16 @@ const envSchema = z
         required_error: "REDIS_URL is required",
       })
       .min(1, "REDIS_URL cannot be empty"),
+
+    UPSTASH_REDIS_REST_URL: z
+      .string()
+      .url("UPSTASH_REDIS_REST_URL must be a valid URL")
+      .optional(),
+
+    UPSTASH_REDIS_REST_TOKEN: z
+      .string()
+      .min(1, "UPSTASH_REDIS_REST_TOKEN cannot be empty")
+      .optional(),
 
     // Server Configuration
     PORT: z.coerce
@@ -144,6 +153,16 @@ const envSchema = z
           message:
             "ADMIN_SECRET is required when NODE_ENV=production. Must be at least 16 characters.",
           path: ["ADMIN_SECRET"],
+          fatal: true,
+        });
+      }
+
+      if (!data.WHATSAPP_TOKEN && !data.WHATSAPP_ACCESS_TOKEN) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "WHATSAPP_TOKEN or WHATSAPP_ACCESS_TOKEN is required when NODE_ENV=production.",
+          path: ["WHATSAPP_TOKEN"],
           fatal: true,
         });
       }
@@ -235,4 +254,3 @@ export const config = loadConfig();
  * Inferred from the Zod schema for type safety
  */
 export type AppConfig = z.infer<typeof envSchema>;
-

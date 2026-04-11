@@ -1,14 +1,14 @@
 import Fastify from "fastify";
+import { Prisma } from "@prisma/client";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { config } from "./config/env.js";
 import { logger } from "./core/logger.js";
 import { MessageRouter } from "./core/message-router.js";
 import { TwilioWhatsAppAdapter } from "./channels/whatsapp-twilio.js";
-import type { TwilioWebhookBody } from "./channels/whatsapp-twilio.js";
+import type { MetaWebhookBody } from "./channels/whatsapp-twilio.js";
 import { enqueueMessage, startWorker, closeQueue } from "./queues/message-queue.js";
 import { prisma } from "./db/client.js";
-import twilio from "twilio";
 
 async function main() {
   // ── Production environment guard ────────────────────
@@ -44,16 +44,6 @@ async function main() {
     timeWindow: "1 minute",
   });
 
-  // Parse URL-encoded bodies (Twilio sends form data)
-  app.addContentTypeParser(
-    "application/x-www-form-urlencoded",
-    { parseAs: "string", bodyLimit: 10_000 },
-    (req, body, done) => {
-      const parsed = Object.fromEntries(new URLSearchParams(body as string));
-      done(null, parsed);
-    }
-  );
-
   // ── Initialize adapters & router ────────────────────
   const whatsappAdapter = new TwilioWhatsAppAdapter();
   const router = new MessageRouter();
@@ -67,66 +57,53 @@ async function main() {
     status: "ok",
     timestamp: new Date(),
     uptime: process.uptime(),
-    provider: "twilio",
+    provider: "meta",
   }));
 
-  // ── Twilio WhatsApp webhook (POST) ─────────────────
-  app.post<{ Body: TwilioWebhookBody }>(
+  app.get("/webhooks/whatsapp", async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+
+    if (
+      query["hub.mode"] === "subscribe" &&
+      query["hub.verify_token"] === config.WHATSAPP_VERIFY_TOKEN
+    ) {
+      return reply.status(200).send(query["hub.challenge"] ?? "");
+    }
+
+    return reply.status(403).send("Forbidden");
+  });
+
+  // ── Meta WhatsApp webhook (POST) ───────────────────
+  app.post<{ Body: MetaWebhookBody }>(
     "/webhooks/whatsapp",
     async (request, reply) => {
-      try {
-        const body = request.body;
+      const body = request.body;
 
-        // Validate request is from Twilio
-        const twilioSignature = request.headers["x-twilio-signature"] as string;
-        const webhookUrl = config.WEBHOOK_BASE_URL
-          ? `${config.WEBHOOK_BASE_URL}/webhooks/whatsapp`
-          : `http://localhost:${config.PORT}/webhooks/whatsapp`;
+      prisma.webhookLog.create({
+        data: {
+          channel: "WHATSAPP",
+          eventType: "meta_message",
+          payload: body as Prisma.InputJsonValue,
+        },
+      }).catch((err: unknown) =>
+        logger.warn({ err }, "Failed to log webhook (DB may be sleeping)"),
+      );
 
-        const isValid = twilio.validateRequest(
-          config.TWILIO_AUTH_TOKEN,
-          twilioSignature || "",
-          webhookUrl,
-          body as Record<string, string>
-        );
+      const normalized = whatsappAdapter.parseTwilioWebhook(body);
 
-        if (!isValid && config.NODE_ENV === "production") {
-          logger.warn("Invalid Twilio signature");
-          return reply.status(403).send("Forbidden");
-        }
+      if (!normalized) {
+        return reply.status(200).send({ received: true });
+      }
 
-        // Log webhook for debugging (non-blocking — don't let DB failures kill the handler)
-        prisma.webhookLog.create({
-          data: {
-            channel: "WHATSAPP",
-            eventType: "twilio_message",
-            payload: body as Record<string, string | undefined>,
-          },
-        }).catch((err) => logger.warn({ err }, "Failed to log webhook (DB may be sleeping)"));
-
-        // Parse into normalized message
-        const normalized = whatsappAdapter.parseTwilioWebhook(body);
-        if (!normalized) {
-          // Return empty TwiML
-          reply.header("Content-Type", "text/xml");
-          return reply.send("<Response></Response>");
-        }
-
-        // Enqueue for async AI processing
+      void (async () => {
         try {
           await enqueueMessage(normalized);
         } catch (enqueueError) {
           logger.error({ enqueueError }, "Failed to enqueue message — Redis may be down");
         }
+      })();
 
-        // Return empty TwiML (response sent async via API)
-        reply.header("Content-Type", "text/xml");
-        return reply.send("<Response></Response>");
-      } catch (error) {
-        logger.error({ error }, "Twilio webhook processing error");
-        reply.header("Content-Type", "text/xml");
-        return reply.send("<Response></Response>");
-      }
+      return reply.status(200).send({ received: true });
     }
   );
 
@@ -178,7 +155,7 @@ Understand Pidgin English if customers use it.`,
   try {
     await app.listen({ port: config.PORT, host: "0.0.0.0" });
     logger.info(`🚀 ShadowSpark Chatbot running on port ${config.PORT}`);
-    logger.info(`📱 WhatsApp webhook (Twilio): POST /webhooks/whatsapp`);
+    logger.info(`📱 WhatsApp webhook (Meta): GET/POST /webhooks/whatsapp`);
     logger.info(`❤️  Health check: GET /health`);
   } catch (error) {
     logger.fatal({ error }, "Server failed to start");
