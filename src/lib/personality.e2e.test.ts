@@ -151,7 +151,10 @@ for (const mode of Object.keys(PERSONALITY_MODES) as ModeKey[]) {
   const fakeMsg = mode === "default" ? "hello" :
     mode === "confused" ? "explain this" :
     mode === "enterprise" ? "enterprise scale" :
-    mode === "sme" ? "small startup" : "show me demo";
+    mode === "sme" ? "small startup" :
+    mode === "devops" ? "deploy to railway" :
+    mode === "security" ? "check security settings" :
+    mode === "growth" ? "how do I monetize this?" : "show me demo";
 
   const result = buildEnhancedSystemPrompt(longBase, fakeMsg);
 

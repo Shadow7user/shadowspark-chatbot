@@ -47,6 +47,27 @@ export const PERSONALITY_MODES = {
     temperature: 0.7,
     max_tokens: 280,
   },
+  devops: {
+    prefix: "From a DevOps and infrastructure standpoint, ",
+    suffix: " Let's ensure this is production-ready, observable, and resilient.",
+    style: "technical, systematic, infrastructure-focused, reliability-oriented",
+    temperature: 0.45,
+    max_tokens: 320,
+  },
+  security: {
+    prefix: "From a security and hardening perspective, ",
+    suffix: " Always validate inputs, enforce least privilege, and monitor for anomalies.",
+    style: "precise, risk-aware, defense-in-depth oriented",
+    temperature: 0.4,
+    max_tokens: 300,
+  },
+  growth: {
+    prefix: "Looking at this through a SaaS growth and monetization lens, ",
+    suffix: " Position this as a scalable revenue stream targeting both Nigerian and global markets.",
+    style: "strategic, opportunity-driven, market-aware, monetization-focused",
+    temperature: 0.7,
+    max_tokens: 300,
+  },
 } as const;
 
 export type ModeKey = keyof typeof PERSONALITY_MODES;
@@ -94,6 +115,37 @@ export function getModeForMessage(userMessage: string): ModeKey {
     lower.includes("how much")
   ) {
     return "sales";
+  }
+
+  if (
+    lower.includes("security") ||
+    lower.includes("vulnerability") ||
+    lower.includes("rate limit") ||
+    lower.includes("auth token") ||
+    lower.includes("brute force")
+  ) {
+    return "security";
+  }
+
+  if (
+    lower.includes("deploy") ||
+    lower.includes("webhook") ||
+    lower.includes("pipeline") ||
+    lower.includes("ci/cd") ||
+    lower.includes("railway") ||
+    lower.includes("environment variable")
+  ) {
+    return "devops";
+  }
+
+  if (
+    lower.includes("monetize") ||
+    lower.includes("monetization") ||
+    lower.includes("revenue model") ||
+    lower.includes("saas pricing") ||
+    lower.includes("grow my")
+  ) {
+    return "growth";
   }
 
   return "default";

@@ -31,6 +31,22 @@ const cases: TestCase[] = [
   { input: "Can you show me a demo?", expected: "sales" },
   { input: "Show me how it works", expected: "sales" },
 
+  // devops branch
+  { input: "How do I deploy to Railway?", expected: "devops" },
+  { input: "My webhook isn't working", expected: "devops" },
+  { input: "How do I set up a CI/CD pipeline?", expected: "devops" },
+  { input: "What environment variable should I set?", expected: "devops" },
+
+  // security branch
+  { input: "Is my webhook security configured correctly?", expected: "security" },
+  { input: "How do I fix a rate limit issue?", expected: "security" },
+  { input: "What auth token format should I use?", expected: "security" },
+
+  // growth branch
+  { input: "How do I monetize this chatbot?", expected: "growth" },
+  { input: "What is a good revenue model for this?", expected: "growth" },
+  { input: "What is the best saas pricing strategy?", expected: "growth" },
+
   // default branch
   { input: "Tell me about ShadowSpark", expected: "default" },
   { input: "Hello, I need help", expected: "default" },
